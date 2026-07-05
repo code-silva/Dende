@@ -1,11 +1,17 @@
 import { StyleSheet, Text, View } from "react-native";
+import { DistrictBadge } from "./DistrictBadge";
 
 interface MarketBannerProps {
   marketName: string;
   subtitle: string;
+  address?: string;
 }
 
-export function MarketBanner({ marketName, subtitle }: MarketBannerProps) {
+export function MarketBanner({
+  marketName,
+  subtitle,
+  address,
+}: MarketBannerProps) {
   const firstLetter = marketName ? marketName[0].toUpperCase() : "?";
   const displayName = marketName ? marketName.toUpperCase() : "LOADING...";
 
@@ -14,7 +20,14 @@ export function MarketBanner({ marketName, subtitle }: MarketBannerProps) {
       <View style={styles.marketLogo}>
         <Text style={styles.marketInitials}>{firstLetter}</Text>
       </View>
-      <View>
+
+      <View style={styles.textContainer}>
+        {!!address && (
+          <View style={{ marginBottom: 4 }}>
+            <DistrictBadge neighborhood={address} />
+          </View>
+        )}
+
         <Text style={styles.marketName}>{displayName}</Text>
         <Text style={styles.marketStatus}>{subtitle}</Text>
       </View>
@@ -25,7 +38,7 @@ export function MarketBanner({ marketName, subtitle }: MarketBannerProps) {
 const styles = StyleSheet.create({
   marketBanner: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: 15,
     backgroundColor: "#FFF",
     marginHorizontal: 10,
@@ -33,6 +46,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#EEE",
+  },
+  textContainer: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
   },
   marketInitials: {
     fontSize: 20,
@@ -46,7 +65,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8f8f8",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 5,
+    marginRight: 12,
     borderWidth: 1,
     borderColor: "#DDD",
   },
@@ -54,6 +73,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-Bold",
     fontSize: 16,
     color: "#000",
+    marginTop: 6,
   },
   marketStatus: {
     fontSize: 10,
