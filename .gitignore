@@ -38,3 +38,8 @@ celerybeat-schedule.db
 
 # Flyers
 flyers/
+
+# Agentes de IA
+.agents/
+.task.md
+task.md

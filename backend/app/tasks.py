@@ -1,3 +1,4 @@
+import json
 import logging
 import tempfile
 from pathlib import Path
@@ -5,12 +6,156 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from celery import chord, shared_task
+from ..core import settings
+from google import genai
+from google.genai import types
 
 from .models import Offer
+from .utils import validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
 
 FLYERS_BASE_DIR = Path(tempfile.gettempdir()) / "flyers"
+
+PROMPT_TEXT = """
+Sua tarefa é analisar os panfletos de produtos de mercado fornecidos. Extrair todos os produtos, preços e informações do panfleto e retorná-los em um formato JSON estrito e padronizado.
+
+# Regras de Extração e Limpeza:
+
+- Nome: Extraia apenas a categoria genérica do produto para a coluna "name" (ex: "Batata"). O campo "brand" deve conter o nome do fabricante ou marca (ex: "Pringles"). É proibido repetir o valor de "brand" dentro do campo "name". Se o produto for um Pack ou Fardo, adicione apenas essa condição ao nome (Ex: "Cerveja Pack"). Mesmo que o produto seja amplamente conhecido pelo nome da marca (ex: Pringles, Bombril, Coca-Cola), extraia o substantivo comum para o 'name' (Batata, Esponja de Aço, Refrigerante) e o nome próprio para 'brand'.
+- Marca: Se houver marca explícita (ex: "Tio João", "Coca-Cola", "Nestlé"), separe-a do nome e especifique-a na coluna "Brand". Se uma palavra for classificada como 'brand', ela está estritamente proibida de aparecer no campo 'name'.
+- Medida e Unidade: Se o texto diz "5kg", separe em colunas de medida e de unidade (ex: medida=5, unidade='kg'). Para a coluna de unidades, você pode considerar um dos seguintes valores: "g", "kg", "un", "l" ou "ml". Se o produto for vendido por peso (ex: "Bife de Chorizo Kg"), use medida=1.0 e a unidade de medida normalmente, identificadas pelas colunas "unit_of_measure" e "measure".
+- Preço: Converta para formato decimal (ponto para decimais). Ex: "R$ 7,99" vira 7.99. Se houver mais de um preço para o mesmo produto (ex: "Varejo" e "Clube", "Atacado"), crie vários itens separados no JSON para o mesmo produto, diferenciando-os pelo seu tipo: "Varejo", "Clube", "Atacado", "Cartão", etc. Se não tiver o tipo especificado no produto, considere "Varejo" como o padrão. O preço está especificado na coluna "price".
+- Data de Validade: Procure no rodapé ou cabeçalho a data de validade da oferta (ex: "Válido até 15/10"). Retorne no formato YYYY-MM-DD. Está especificada na coluna "expiration_date'.
+- Mercado: Identifique o nome do mercado pelo logotipo ou texto de destaque. Está especificado pela coluna "supermarket".
+- Canto superior esquerdo e canto inferior direito: Para cada produto, especifique as coordenadas em pixels (x, y) do panfleto onde está localizado a imagem do produto, para recorte e armazenamento posterior da imagem no banco de dados. Estão especificados pela coluna "top_left" e "bottom_right".
+
+Formato de Saída (JSON): Retorne APENAS um objeto JSON com a seguinte estrutura, sem markdown em volta, com todos os itens do mercado:
+
+JSON
+{
+  "supermarket": "Nome do Mercado",
+  "expiration_date": "YYYY-MM-DD",
+  "items": [
+    {
+      "name": "String (Ex: Arroz Branco)",
+      "type": "String (Ex: Varejo)",
+      "brand": "String ou null (Ex: Camil)",
+      "unit_of_measure": "String (kg, g, l, ml, un)",
+      "measure": Float (Ex: 5.0),
+      "price": Float (Ex: 21.90),
+      "top_left": [x, y],
+      "bottom_right": [x, y],
+    }
+  ]
+}
+
+"""
+
+
+@shared_task(bind=True)
+def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
+    """
+    Consumes flyer images from a supermarket folder, sending up to 5 images per request
+    along with the prompt to Google Gemini AI Studio requesting strict JSON.
+    If a 429 quota exceeded error occurs, it alternates to the next free model.
+    If all free models are exhausted, it keeps the task in the Celery queue.
+    """
+
+    target = Path(market_folder)
+    if not target.exists():
+        logger.error(f"Supermarket flyer path not found: {market_folder}")
+        return {"status": "error", "reason": "Path not found"}
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    images = sorted([file for file in target.iterdir()])
+
+    if not images:
+        logger.info(f"No flyer images found in path: {market_folder}")
+        return {"status": "skipped", "reason": "No images found"}
+
+    mime_types_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+
+    batch_size = 5
+    extracted_batches = []
+
+    for batch_start in range(0, len(images), batch_size):
+        batch_images = images[batch_start:batch_start + batch_size]
+        contents = []
+
+        for img_path in batch_images:
+            image_bytes = img_path.read_bytes()
+            mime_type = mime_types_map.get(img_path.suffix.lower(), "image/jpeg")
+            contents.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+
+        contents.append(PROMPT_TEXT)
+
+        last_error = None
+        batch_extracted = False
+
+        for model_name in settings.FREE_GEMINI_MODELS:
+            try:
+                logger.info(
+                    f"Processing batch of {len(batch_images)} flyers from {market_folder} "
+                    f"using model {model_name}"
+                )
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                    ),
+                )
+
+                data = json.loads(response.text)
+                validated_data = validate_extracted_flyer_json(data)
+
+                extracted_batches.append({
+                    "model_used": model_name,
+                    "images": [str(p) for p in batch_images],
+                    "data": validated_data,
+                })
+
+                batch_extracted = True
+                break
+
+            except Exception as exc:
+                code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+                is_429 = code == 429 or "429" in str(exc)
+                if is_429:
+                    logger.warning(
+                        f"Erro 429: Esgotamento de cota da API com o modelo {model_name}. "
+                        "Alternando para o próximo modelo gratuito..."
+                    )
+                    last_error = exc
+                    continue
+                else:
+                    logger.error(
+                        f"Error processing flyers batch in {market_folder} with {model_name}: {exc}"
+                    )
+                    raise exc
+
+        if not batch_extracted and last_error is not None:
+            retry_delay = settings.GEMINI_QUOTA_RETRY_DELAY
+            logger.warning(
+                f"Esgotamento da cota em todos os modelos gratuitos "
+                f"para a pasta {market_folder}. Colocando a tarefa na fila do Celery."
+            )
+        
+            raise self.retry(exc=last_error, countdown=retry_delay)
+
+    return {
+        "status": "success",
+        "market_folder": str(market_folder),
+        "url": url,
+        "extracted_batches": extracted_batches,
+    }
 
 
 @shared_task
@@ -76,6 +221,8 @@ def scrap_supermarket_page(url: str):
 
         # Updating metrics for the final summary report
         metrics["downloaded_images"] = download_count
+        extract_supermarket_flyers_data.delay(str(new_temp_folder), url=url)
+
         return metrics
 
     except Exception as e:
