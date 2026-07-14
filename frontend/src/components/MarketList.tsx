@@ -39,9 +39,9 @@ export const MarketList: React.FC<MarketListProps> = ({
 
   // Dynamic columns definition for markets list
   const getNumColumns = (): number => {
-    if (width >= DESKTOP_LARGE) return 3;       // Monitors / Notebooks
-    if (width >= TABLET_LANDSCAPE) return 2;   // Tablets in landscape
-    return 1;                                  // Standard mobile screens
+    if (width >= DESKTOP_LARGE) return 3; // Monitors / Notebooks
+    if (width >= TABLET_LANDSCAPE) return 2; // Tablets in landscape
+    return 1; // Standard mobile screens
   };
 
   const numColumns = getNumColumns();
@@ -61,10 +61,7 @@ export const MarketList: React.FC<MarketListProps> = ({
               : styles.fullWidthWrapper
           }
         >
-          <MarketCard
-            market={item}
-            onPress={() => handleMarketPress(item)}
-          />
+          <MarketCard market={item} onPress={() => handleMarketPress(item)} />
         </View>
       )}
       columnWrapperStyle={numColumns > 1 ? styles.rowWrapper : null}
@@ -92,7 +89,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 0,
     flexBasis: 0,
-    padding: 8, 
+    padding: 8,
   },
   fullWidthWrapper: {
     width: "100%",

@@ -61,7 +61,7 @@ export function MarketCard({ market, onPress, coverImage }: MarketCardProps) {
             </Text>
           </View>
         ) : (
-          <View /> 
+          <View />
         )}
 
         <View style={styles.buttonContainer}>
@@ -147,9 +147,9 @@ const styles = StyleSheet.create({
   distanceText: {
     fontSize: 14,
     fontFamily: "Inter-SemiBold",
-    color: "#00838F", 
+    color: "#00838F",
   },
   buttonContainer: {
-    minWidth: 120, 
+    minWidth: 120,
   },
 });
