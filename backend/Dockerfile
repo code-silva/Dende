@@ -29,6 +29,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     gdal-bin \
+    spatialite-bin \
+    libsqlite3-mod-spatialite \
     && rm -rf /var/lib/apt/lists/*
 
 # Copia o .venv pronto do BUILDER
