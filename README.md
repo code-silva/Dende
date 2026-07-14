@@ -7,7 +7,7 @@
 [](https://www.google.com/search?q=./README.md%23licen%C3%A7a)
 [](https://www.google.com/search?q=./README.md%23tecnologias-utilizadas)
 
-O **Compara preços (Projeto Mercado)** é um aplicativo mobile focado em **comparação inteligente de preços** para compras de supermercado. Nosso objetivo é simplificar a economia, oferecendo ao usuário uma visão consolidada das melhores ofertas próximas e permitindo a **personalização de preços máximos** e busca eficiente de melhores promoções para sua "feira".
+O **Dendê** é um aplicativo mobile focado em **comparação inteligente de preços** para compras de supermercado. Nosso objetivo é simplificar a economia, oferecendo ao usuário uma visão consolidada das melhores ofertas próximas e permitindo a **personalização de preços máximos** e busca eficiente de melhores promoções para sua "feira".
 
 <img width="1584" height="396" alt="Os melhores preços em um só lugar (1)" src="https://github.com/user-attachments/assets/998dea2f-ff7e-44bb-be82-bc022ddbb169" />
 
