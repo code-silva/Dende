@@ -22,9 +22,17 @@ const isSmall = screenWidth < 350;
 
 interface SearchBarProps {
   initialValue?: string;
+  placeholder?: string;
+  onChangeText?: (text: string) => void;
+  disableApiSearch?: boolean;
 }
 
-export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
+export const SearchBar = ({
+  initialValue = "",
+  placeholder = "Busque por produtos...",
+  onChangeText,
+  disableApiSearch = false,
+}: SearchBarProps) => {
   const [term, setTerm] = useState(initialValue);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -34,7 +42,7 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
   const handleSearchAction = (searchTerm: string) => {
     Keyboard.dismiss();
     setIsFocused(false);
-    fetchHybridSearch(searchTerm);
+    if (!disableApiSearch) fetchHybridSearch(searchTerm);
   };
 
   useEffect(() => {
@@ -42,6 +50,12 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
   }, [initialValue]);
 
   useEffect(() => {
+    onChangeText?.(term);
+  }, [term, onChangeText]);
+
+  useEffect(() => {
+    if (disableApiSearch) return;
+
     if (term.length < 2) {
       setIsLoading(false);
       setSuggestions([]);
@@ -72,7 +86,7 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
     }, 500);
 
     return () => clearTimeout(searchDelay);
-  }, [term]);
+  }, [term, disableApiSearch]);
 
   return (
     <View style={styles.container}>
@@ -83,7 +97,7 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
             styles.input,
             { fontSize: isUltraNarrow ? 13 : isSmall ? 14 : 16 },
           ]}
-          placeholder="Busque por produtos..."
+          placeholder={placeholder}
           placeholderTextColor="#A0AAB2"
           value={term}
           onChangeText={setTerm}
@@ -101,7 +115,7 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
 
           {/* Lupe Icon*/}
           <View style={styles.iconWrapper}>
-            {isLoading ? (
+            {isLoading && !disableApiSearch ? (
               <ActivityIndicator
                 size="small"
                 color="#FFFFFF"
@@ -124,32 +138,36 @@ export const SearchBar = ({ initialValue = "" }: SearchBarProps) => {
         </View>
       </View>
 
-      {isFocused && term.length >= 2 && suggestions.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          {suggestions.map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={styles.suggestionItem}
-              onPress={() => {
-                setTerm(item);
-                setSuggestions([]);
-              }}
-            >
-              <Feather
-                name="search"
-                size={16}
-                color="#A0AAB2"
-                style={{ marginRight: 10 }}
-              />
-              <Text style={styles.suggestionText} numberOfLines={1}>
-                {item}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {!disableApiSearch &&
+        isFocused &&
+        term.length >= 2 &&
+        suggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {suggestions.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={styles.suggestionItem}
+                onPress={() => {
+                  setTerm(item);
+                  setSuggestions([]);
+                }}
+              >
+                <Feather
+                  name="search"
+                  size={16}
+                  color="#A0AAB2"
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={styles.suggestionText} numberOfLines={1}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-      {isFocused &&
+      {!disableApiSearch &&
+        isFocused &&
         term.length >= 2 &&
         isSearchPerformed &&
         suggestions.length === 0 &&

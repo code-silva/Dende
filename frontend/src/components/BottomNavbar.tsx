@@ -5,6 +5,7 @@ import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type * as Location from "expo-location";
+import { useCallback } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HomeScreen } from "../screens/HomeScreen";
@@ -92,16 +93,20 @@ function HomeStackScreen({
 
 const SupermarketStack = createNativeStackNavigator();
 
-function SupermarketStackScreen() {
+function SupermarketStackScreen({
+  location,
+}: {
+  location: Location.LocationObject | null;
+}) {
   return (
     <SupermarketStack.Navigator
       id="supermarketStack"
       screenOptions={{ headerShown: false }}
     >
-      <SupermarketStack.Screen
-        name="SupermarketsList"
-        component={SupermarketsScreen}
-      />
+      <SupermarketStack.Screen name="SupermarketsList">
+        {() => <SupermarketsScreen location={location} />}
+      </SupermarketStack.Screen>
+
       <SupermarketStack.Screen
         name="StoreProductsScreen"
         component={StoreProductsScreen}
@@ -116,6 +121,20 @@ export function BottomNavbar({
   location: Location.LocationObject | null;
 }) {
   const insets = useSafeAreaInsets();
+
+  const HomeScreenWrapper = useCallback(
+    function HomeScreenWrapper() {
+      return <HomeStackScreen location={location} />;
+    },
+    [location],
+  );
+
+  const SupermarketScreenWrapper = useCallback(
+    function SupermarketScreenWrapper() {
+      return <SupermarketStackScreen location={location} />;
+    },
+    [location],
+  );
 
   return (
     <Tab.Navigator
@@ -147,19 +166,18 @@ export function BottomNavbar({
     >
       <Tab.Screen
         name="home"
+        component={HomeScreenWrapper}
         options={{
           tabBarLabel: "INÍCIO",
           tabBarIcon: ({ color }) => (
             <Feather name="home" size={25} color={color} />
           ),
         }}
-      >
-        {() => <HomeStackScreen location={location} />}
-      </Tab.Screen>
+      />
 
       <Tab.Screen
         name="supermarkets"
-        component={SupermarketStackScreen}
+        component={SupermarketScreenWrapper}
         options={{
           tabBarLabel: "MERCADOS",
           tabBarIcon: ({ color }) => (

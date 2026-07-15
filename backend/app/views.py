@@ -2,6 +2,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -69,7 +70,7 @@ class BranchSupermarketListView(generics.ListAPIView):
             BranchSupermarket.objects.select_related(
                 "parent_supermarket",
             )
-            .filter(product_offers__isnull=False)
+            .filter(product_offers__offer__expiration_date__gte=timezone.now().date())
             .distinct()
         )
 
