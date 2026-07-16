@@ -57,9 +57,7 @@ JSON
 def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
     """
     Consumes flyer images from a supermarket folder, sending up to 5 images per request
-    along with the prompt to Google Gemini AI Studio requesting strict JSON.
-    If a 429 quota exceeded error occurs, it alternates to the next free model.
-    If all free models are exhausted, it keeps the task in the Celery queue.
+    to Google Gemini AI. Consolidates the results and saves them to a JSON file.
     """
 
     target = Path(market_folder)
@@ -68,7 +66,9 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
         return {"status": "error", "reason": "Path not found"}
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    images = sorted([file for file in target.iterdir()])
+
+    valid_extensions = {".jpg", ".jpeg", ".png", ".webp"}
+    images = sorted([f for f in target.iterdir() if f.suffix.lower() in valid_extensions])
 
     if not images:
         logger.info(f"No flyer images found in path: {market_folder}")
@@ -101,9 +101,10 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
         for model_name in settings.FREE_GEMINI_MODELS:
             try:
                 logger.info(
-                    f"Processing batch of {len(batch_images)} flyers from {market_folder} "
-                    f"using model {model_name}"
+                    f"Processing batch {batch_start//batch_size + 1} ({len(batch_images)} flyers) "
+                    f"from {market_folder} using {model_name}"
                 )
+                
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
@@ -116,46 +117,56 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
                 data = json.loads(response.text)
                 validated_data = validate_extracted_flyer_json(data)
 
-                extracted_batches.append({
-                    "model_used": model_name,
-                    "images": [str(p) for p in batch_images],
-                    "data": validated_data,
-                })
+                extracted_batches.append(validated_data)
 
                 batch_extracted = True
                 break
 
             except Exception as exc:
                 code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
-                is_429 = code == 429 or "429" in str(exc)
-                if is_429:
+                if code == 429 or "429" in str(exc):
                     logger.warning(
-                        f"Erro 429: Esgotamento de cota da API com o modelo {model_name}. "
-                        "Alternando para o próximo modelo gratuito..."
+                        f"Error 429: Quota exceeded on {model_name}. Switching model..."
                     )
                     last_error = exc
                     continue
                 else:
-                    logger.error(
-                        f"Error processing flyers batch in {market_folder} with {model_name}: {exc}"
-                    )
+                    logger.error(f"Error in {market_folder} with {model_name}: {exc}")
                     raise exc
 
         if not batch_extracted and last_error is not None:
             retry_delay = settings.GEMINI_QUOTA_RETRY_DELAY
-            logger.warning(
-                f"Esgotamento da cota em todos os modelos gratuitos "
-                f"para a pasta {market_folder}. Colocando a tarefa na fila do Celery."
-            )
-        
+            logger.warning(f"All models failed for {market_folder}. Re-queuing task.")
             raise self.retry(exc=last_error, countdown=retry_delay)
 
-    return {
-        "status": "success",
-        "market_folder": str(market_folder),
-        "url": url,
-        "extracted_batches": extracted_batches,
+    
+    global_supermarket = None
+    global_expiration = None
+    all_items = []
+
+    # Running through all files trying to find out the supermarket's name and 
+    # the expiration date, since it could be in any image
+    for batch_data in extracted_batches:
+        if batch_data.get("supermarket") and not global_supermarket:
+            global_supermarket = batch_data["supermarket"]
+            
+        if batch_data.get("expiration_date") and not global_expiration:
+            global_expiration = batch_data["expiration_date"]
+            
+        all_items.extend(batch_data.get("items", []))
+
+    consolidated_json = {
+        "supermarket": global_supermarket,
+        "expiration_date": global_expiration,
+        "items": all_items
     }
+
+    # Saving JSON in the same folder as flyers
+    output_filepath = target / "extracted_data.json"
+    with open(output_filepath, "w", encoding="utf-8") as json_file:
+        json.dump(consolidated_json, json_file, indent=2, ensure_ascii=False)
+
+    logger.info(f"Extraction finished for {market_folder}. {len(all_items)} items saved.")
 
 
 @shared_task
