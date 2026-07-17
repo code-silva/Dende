@@ -6,6 +6,7 @@ export interface Market {
   address: string;
   distanceInKilometers: number | null;
   nameColor: null | string;
+  offersCount?: number;
 }
 
 export interface LocationCoordinates {

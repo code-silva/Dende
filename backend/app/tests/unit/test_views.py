@@ -76,6 +76,42 @@ class TestBranchSupermarketListView:
         assert len(results) == 1
         assert results[0]["name"] == branch_supermarket.parent_supermarket.name
 
+    def test_market_with_only_active_offers(self, api_client, branch_with_active_offers):
+        """
+        Testing that a market with only active (non-expired) offers appears in the response.
+        """
+
+        response = api_client.get(self.URL, {"latitude": -15.7801, "longitude": -47.9292})
+
+        results = response.data["results"]
+        names = [result["name"] for result in results]
+
+        assert branch_with_active_offers.parent_supermarket.name in names
+
+    def test_market_with_only_expired_offers(self, api_client, branch_with_expired_offers):
+        """
+        Testing that a market with only expired offers does NOT appear in the response.
+        """
+
+        response = api_client.get(self.URL, {"latitude": -15.7801, "longitude": -47.9292})
+
+        results = response.data["results"]
+        names = [result["name"] for result in results]
+
+        assert branch_with_expired_offers.parent_supermarket.name not in names
+
+    def test_market_with_mixed_offers(self, api_client, branch_with_mixed_offers):
+        """
+        Testing that a market with mixed (active and expired) offers appears in the response.
+        """
+
+        response = api_client.get(self.URL, {"latitude": -15.7801, "longitude": -47.9292})
+
+        results = response.data["results"]
+        names = [result["name"] for result in results]
+
+        assert branch_with_mixed_offers.parent_supermarket.name in names
+
 
 @pytest.mark.django_db
 class TestHybridSearchView:

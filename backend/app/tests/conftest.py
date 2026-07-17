@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.gis.geos import Point
+from django.utils import timezone
 from model_bakery import baker
 from rest_framework.test import APIClient
 
@@ -43,7 +46,8 @@ def branch_supermarket(db, parent_supermarket):
         coordinates=Point(-47.9292, -15.7801),
     )
 
-    baker.make(BranchProductOffer, branch_supermarket=branch)
+    future_date = timezone.now().date() + timedelta(days=1)
+    baker.make(BranchProductOffer, branch_supermarket=branch, offer__expiration_date=future_date)
 
     return branch
 
@@ -52,6 +56,7 @@ def branch_supermarket(db, parent_supermarket):
 def supermarkets_list(db):
     """Creates multiple supermarkets to test sorting and filters, with offers linked."""
 
+    future_date = timezone.now().date() + timedelta(days=1)
     parent_supermarkets = baker.make(ParentSupermarket, _quantity=5)
     branch_supermarkets = []
 
@@ -63,7 +68,9 @@ def supermarkets_list(db):
             city="Gama",
             address="Gama Sul",
         )
-        baker.make(BranchProductOffer, branch_supermarket=branch)
+        baker.make(
+            BranchProductOffer, branch_supermarket=branch, offer__expiration_date=future_date
+        )
 
         branch_supermarkets.append(branch)
 
@@ -117,3 +124,74 @@ def offers_list(db, parent_supermarket):
 
     offers.sort(key=lambda x: x.product.category.priority)
     return offers
+
+
+@pytest.fixture
+def branch_with_active_offers(db):
+    """Creates a branch with only active (non-expired) offers."""
+    parent = baker.make(ParentSupermarket, name="Active Market")
+    branch = baker.make(
+        BranchSupermarket,
+        parent_supermarket=parent,
+        state="DF",
+        city="Gama",
+        address="Gama Sul, QI 02",
+        coordinates=Point(-47.9292, -15.7801),
+    )
+    future_date = timezone.now().date() + timedelta(days=5)
+    baker.make(
+        BranchProductOffer,
+        branch_supermarket=branch,
+        offer__expiration_date=future_date,
+        _quantity=2,
+    )
+    return branch
+
+
+@pytest.fixture
+def branch_with_expired_offers(db):
+    """Creates a branch with only expired offers."""
+    parent = baker.make(ParentSupermarket, name="Expired Market")
+    branch = baker.make(
+        BranchSupermarket,
+        parent_supermarket=parent,
+        state="DF",
+        city="Gama",
+        address="Gama Sul, QI 03",
+        coordinates=Point(-47.9292, -15.7801),
+    )
+    past_date = timezone.now().date() - timedelta(days=1)
+    baker.make(
+        BranchProductOffer,
+        branch_supermarket=branch,
+        offer__expiration_date=past_date,
+        _quantity=2,
+    )
+    return branch
+
+
+@pytest.fixture
+def branch_with_mixed_offers(db):
+    """Creates a branch with both active and expired offers."""
+    parent = baker.make(ParentSupermarket, name="Mixed Market")
+    branch = baker.make(
+        BranchSupermarket,
+        parent_supermarket=parent,
+        state="DF",
+        city="Gama",
+        address="Gama Sul, QI 04",
+        coordinates=Point(-47.9292, -15.7801),
+    )
+    future_date = timezone.now().date() + timedelta(days=5)
+    past_date = timezone.now().date() - timedelta(days=1)
+    baker.make(
+        BranchProductOffer,
+        branch_supermarket=branch,
+        offer__expiration_date=future_date,
+    )
+    baker.make(
+        BranchProductOffer,
+        branch_supermarket=branch,
+        offer__expiration_date=past_date,
+    )
+    return branch
