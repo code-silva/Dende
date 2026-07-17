@@ -10,9 +10,9 @@ class FlyerItemSchema(BaseModel):
 
     name: str
     type: str | None = "Varejo"
-    brand: str
-    unit_of_measure: str
-    measure: float
+    brand: str | None = None
+    unit_of_measure: str | None = None
+    measure: float | None = None
     price: float
     top_left: list[int] | None = None
     bottom_right: list[int] | None = None
@@ -21,7 +21,7 @@ class FlyerItemSchema(BaseModel):
 class FlyerExtractionSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    supermarket: str
+    supermarket: str | None = None
     expiration_date: date | None = None
     items: list[FlyerItemSchema] = Field(default_factory=list)
 
