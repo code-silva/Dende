@@ -18,6 +18,7 @@ from .utils import validate_extracted_flyer_json
 logger = logging.getLogger(__name__)
 
 FLYERS_BASE_DIR = Path(tempfile.gettempdir()) / "flyers"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 
 PROMPT_TEXT = """
 Sua tarefa é analisar os panfletos de produtos de mercado fornecidos. Extrair todos os produtos,
@@ -25,15 +26,24 @@ preços e informações do panfleto e retorná-los em um formato JSON estrito e 
 
 # Regras de Extração e Limpeza:
 
-- Nome: Extraia apenas a categoria genérica do produto para a coluna "name" (ex: "Batata").
-O campo "brand" deve conter o nome do fabricante ou marca (ex: "Pringles"). É proibido repetir o
-valor de "brand" dentro do campo "name". Se o produto for um Pack ou Fardo, adicione apenas essa
-condição ao nome (Ex: "Cerveja Pack"). Mesmo que o produto seja amplamente conhecido pelo nome
-da marca (ex: Pringles, Bombril, Coca-Cola), extraia o substantivo comum para o 'name'
-(Batata, Esponja de Aço, Refrigerante) e o nome próprio para 'brand'.
+- Nome: Extraia o nome do produto juntamente com sua variedade essencial (Ex: "Maçã Verde",
+"Banana Nanica", "Alface Crespa", "Patinho", "Leite Integral"). O campo "brand" deve conter o
+nome do fabricante ou marca (ex: "Pringles"), e por isso é proibido repetir o valor de "brand"
+dentro do campo "name". Se o produto for um Pack ou Fardo, adicione apenas essa condição ao nome
+(Ex: "Cerveja Pack"). Mesmo que o produto seja amplamente conhecido pelo nome da marca (ex:
+Pringles, Bombril, Coca-Cola), extraia o substantivo comum para o 'name' (Batata, Esponja de Aço,
+Refrigerante) e o nome próprio para 'brand'.
+É estritamente proibido incluir adjetivos mercadológicos, métodos de produção, características
+de embalagem ou termos de qualidade (Ex: remova palavras como "Hidropônica", "Premium",
+"Selecionada", "Fresca", "Limpa", "Tipo 1", "Tradicional").
+O objetivo é um nome limpo para comparação de preços.
+Exemplos de limpeza:
+"Alface Crespa Hidropônica" -> "Alface Crespa"
+"Maçã Verde Selecionada Premium" -> "Maçã Verde"
+"Feijão Carioca Tipo 1" -> "Feijão Carioca"
 
 - Marca: Se houver marca explícita (ex: "Tio João", "Coca-Cola", "Nestlé"), separe-a do nome e
-especifique-a na coluna "Brand". Se uma palavra for classificada como 'brand', ela está
+especifique-a na coluna "brand". Se uma palavra for classificada como "brand", ela está
 estritamente proibida de aparecer no campo 'name'.
 
 - Medida e Unidade: Se o texto diz "5kg", separe em colunas de medida e de unidade
@@ -46,11 +56,11 @@ e "measure".
 mais de um preço para o mesmo produto (ex: "Varejo" e "Clube", "Atacado"), crie vários itens
 separados no JSON para o mesmo produto, diferenciando-os pelo seu tipo: "Varejo", "Clube",
 "Atacado", "Cartão", etc. Se não tiver o tipo especificado no produto, considere "Varejo"
-omo o padrão. O preço está especificado na coluna "price".
+como o padrão. O preço está especificado na coluna "price".
 
 - Data de Validade: Procure no rodapé ou cabeçalho a data de validade da oferta
 (ex: "Válido até 15/10"). Retorne no formato YYYY-MM-DD. Está especificada na coluna
-"expiration_date'.
+"expiration_date".
 
 - Mercado: Identifique o nome do mercado pelo logotipo ou texto de destaque. Está especificado
 pela coluna "supermarket".
@@ -60,10 +70,9 @@ coordenadas em pixels (x, y) do panfleto onde está localizado a imagem do produ
 e armazenamento posterior da imagem no banco de dados. Estão especificados pela coluna "top_left"
 e "bottom_right".
 
-Formato de Saída (JSON): Retorne APENAS um objeto JSON com a seguinte estrutura, sem markdown em
-volta, com todos os itens do mercado:
+Formato de Saída (JSON): Retorne APENAS um objeto JSON válido com a seguinte estrutura, sem markdown
+em volta, com todos os itens do mercado:
 
-JSON
 {
   "supermarket": "Nome do Mercado",
   "expiration_date": "YYYY-MM-DD",
@@ -80,14 +89,7 @@ JSON
     }
   ]
 }
-
 """
-
-
-def is_rate_limit_error(exception):
-    """Verifica se o erro é 429 (Too Many Requests) da API do Gemini."""
-    code = getattr(exception, "code", None) or getattr(exception, "status_code", None)
-    return code == 429 or "429" in str(exception)
 
 
 @retry(
@@ -97,7 +99,10 @@ def is_rate_limit_error(exception):
     reraise=True,
 )
 def generate_content_with_retry(client, model_name, contents):
-    """Encapsula a chamada da API com backoff exponencial para gerenciar limites curtos (RPM)."""
+    """
+    Wraps the API call with exponential backoff to manage short burst
+    rate limits (requests per minute).
+    """
     return client.models.generate_content(
         model=model_name,
         contents=contents,
@@ -150,45 +155,44 @@ def extract_supermarket_flyers_data(self, market_folder: str):
 
         contents.append(PROMPT_TEXT)
 
-        last_error = None
-        batch_extracted = False
-
-        for model_name in settings.FREE_GEMINI_MODELS:
-            try:
-                logger.info(
-                    f"Processing batch {batch_start // batch_size + 1}"
-                    f"({len(batch_images)} flyers) from {market_folder} using {model_name}"
-                )
-
-                response = generate_content_with_retry(client, model_name, contents)
-
-                data = json.loads(response.text)
-                validated_data = validate_extracted_flyer_json(data)
-
-                extracted_batches.append(validated_data)
-
-                batch_extracted = True
-                break
-
-            except Exception as exc:
-                if is_rate_limit_error(exc):
-                    logger.warning(
-                        f"""Error 429: Persistent rate limit on model {model_name}.
-                        Trying next model..."""
-                    )
-                    last_error = exc
-                    continue
-                else:
-                    logger.error(f"Error in {market_folder} with {model_name}: {exc}")
-                    raise exc
-
-        if not batch_extracted and last_error is not None:
-            retry_delay = 86400
-            logger.critical(
-                f"""Daily quota possibly exhausted for {market_folder}.
-                Re-queuing task for the next day."""
+        try:
+            logger.info(
+                f"Processing batch {batch_start // batch_size + 1}"
+                f" ({len(batch_images)} flyers) from {market_folder} using {GEMINI_MODEL}"
             )
-            raise self.retry(exc=last_error, countdown=retry_delay)
+
+            response = generate_content_with_retry(client, GEMINI_MODEL, contents)
+
+            data = json.loads(response.text)
+            validated_data = validate_extracted_flyer_json(data)
+
+            extracted_batches.append(validated_data)
+
+        except Exception as exception:
+            exception_string = str(exception)
+            if "429" in exception_string:
+                if "PerMinute" in exception_string:
+                    retry_delay_seconds = 60
+                    logger.warning(
+                        f"""Error 429 (PerMinute rate limit exceeded) for {market_folder}.
+                        Re-queuing task for 60 seconds."""
+                    )
+                else:
+                    retry_delay_seconds = 86400
+                    logger.critical(
+                        f"""Error 429 (PerDay daily quota exceeded) for {market_folder}.
+                        Re-queuing task for 24 hours."""
+                    )
+
+                raise self.retry(
+                    exc=exception,
+                    countdown=retry_delay_seconds,
+                    max_retries=None,
+                ) from exception
+
+            else:
+                logger.error(f"Error in {market_folder} with {GEMINI_MODEL}: {exception}")
+                raise
 
     global_supermarket = None
     global_expiration = None
