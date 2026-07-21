@@ -73,7 +73,7 @@ export function HomeScreen({
         location.coords.longitude,
       );
 
-      setMarkets(data.results);
+      setMarkets(data);
     }
 
     loadMarkets();
