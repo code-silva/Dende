@@ -1,18 +1,6 @@
 import { fetchMarkets } from "./markets";
 import { fetchProducts } from "./products";
-
-export interface ShoppingListItem {
-  productId: number;
-  productName: string;
-  quantity: number;
-  checked: boolean;
-}
-
-export interface ShoppingList {
-  id: string;
-  items: ShoppingListItem[];
-  createdAt: string;
-}
+import type { MyListState } from "../types/list";
 
 export function fetchNearbyMarkets(latitude?: number, longitude?: number) {
   return fetchMarkets(latitude, longitude);
@@ -22,7 +10,7 @@ export function fetchHomeHighlights(latitude?: number, longitude?: number) {
   return fetchProducts(latitude, longitude, 1);
 }
 
-export function fetchMyListInitialState(): Promise<ShoppingList> {
+export function fetchMyListInitialState(): Promise<MyListState> {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
