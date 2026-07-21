@@ -143,7 +143,10 @@ class TestScrapHomePageTask:
         scrap_home_page()
 
         mock_logger_error.assert_called_once()
-        assert "Error when scraping the Home Page: Connection timeout" in mock_logger_error.call_args[0][0]
+        assert (
+            "Error when scraping the Home Page: Connection timeout"
+            in mock_logger_error.call_args[0][0]
+        )
 
 
 @pytest.mark.django_db
@@ -219,7 +222,11 @@ class TestScrapSupermarketPageTask:
         mock_logger_warning,
         mock_flyers_directory,
     ):
-        """Boundary value & MC/DC: skips missing src attributes and individual 404 image failures."""
+        """
+        Skips missing src attributes
+        and individual 404 image failures.
+        """
+
         html_content = """
         <html>
             <div class="text">
@@ -248,7 +255,10 @@ class TestScrapSupermarketPageTask:
         assert metrics["status"] == "success"
         assert metrics["downloaded_images"] == 1
         mock_logger_warning.assert_called_once()
-        assert "Failed to download image https://img.test/404.jpg" in mock_logger_warning.call_args[0][0]
+        assert (
+            "Failed to download image https://img.test/404.jpg"
+            in mock_logger_warning.call_args[0][0]
+        )
 
 
 @pytest.mark.django_db
@@ -285,11 +295,13 @@ class TestExtractSupermarketFlyersDataTask:
         mock_genai_client.return_value = mock_client
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "supermarket": "Test Market",
-            "expiration_date": "2026-10-15",
-            "items": [{"name": "Rice", "price": 21.90, "type": "Varejo"}],
-        })
+        mock_response.text = json.dumps(
+            {
+                "supermarket": "Test Market",
+                "expiration_date": "2026-10-15",
+                "items": [{"name": "Rice", "price": 21.90, "type": "Varejo"}],
+            }
+        )
         mock_client.models.generate_content.return_value = mock_response
 
         result = extract_supermarket_flyers_data(str(market_folder))
@@ -315,16 +327,24 @@ class TestExtractSupermarketFlyersDataTask:
         mock_client = MagicMock()
         mock_genai_client.return_value = mock_client
 
-        resp_batch_1 = MagicMock(text=json.dumps({
-            "supermarket": "Main Market",
-            "expiration_date": None,
-            "items": [{"name": "Item 1", "price": 10.0}],
-        }))
-        resp_batch_2 = MagicMock(text=json.dumps({
-            "supermarket": "Ignored Market Name",
-            "expiration_date": "2026-11-20",
-            "items": [{"name": "Item 2", "price": 5.0}],
-        }))
+        resp_batch_1 = MagicMock(
+            text=json.dumps(
+                {
+                    "supermarket": "Main Market",
+                    "expiration_date": None,
+                    "items": [{"name": "Item 1", "price": 10.0}],
+                }
+            )
+        )
+        resp_batch_2 = MagicMock(
+            text=json.dumps(
+                {
+                    "supermarket": "Ignored Market Name",
+                    "expiration_date": "2026-11-20",
+                    "items": [{"name": "Item 2", "price": 5.0}],
+                }
+            )
+        )
         mock_client.models.generate_content.side_effect = [resp_batch_1, resp_batch_2]
 
         extract_supermarket_flyers_data(str(market_folder))
@@ -403,7 +423,12 @@ class TestGenerateScrapingReportTask:
         """Boundary value & MC/DC: aggregates statistics across different task statuses and None."""
         results = [
             {"market": "market-a", "status": "success", "downloaded_images": 12, "reason": ""},
-            {"market": "market-b", "status": "skipped", "downloaded_images": 0, "reason": "Already processed"},
+            {
+                "market": "market-b",
+                "status": "skipped",
+                "downloaded_images": 0,
+                "reason": "Already processed",
+            },
             {"market": "market-c", "status": "error", "downloaded_images": 0, "reason": "Timeout"},
             None,
         ]
@@ -419,4 +444,3 @@ class TestGenerateScrapingReportTask:
         assert "Supermarkets with Execution Errors: 1" in printed_report
         assert "Total Images/Flyers Downloaded: 12" in printed_report
         mock_logger_info.assert_called_once_with("Scraping workflow completed execution.")
-
