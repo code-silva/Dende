@@ -51,7 +51,7 @@ class TestGenerateContentWithRetry:
         assert result == mock_response
         mock_client.models.generate_content.assert_called_once()
 
-    @patch("tenacity.nap.sleep")
+    @patch.object(generate_content_with_retry.retry, "sleep")
     def test_retry_recovery(self, mock_sleep):
         """MC/DC: recovers from a temporary exception on the second attempt."""
         mock_client = MagicMock()
@@ -66,7 +66,7 @@ class TestGenerateContentWithRetry:
         assert result == mock_response
         assert mock_client.models.generate_content.call_count == 2
 
-    @patch("tenacity.nap.sleep")
+    @patch.object(generate_content_with_retry.retry, "sleep")
     def test_max_attempts_exceeded(self, mock_sleep):
         """Boundary value: raises exception after exceeding max retry attempts (stop=5)."""
         mock_client = MagicMock()
@@ -355,9 +355,10 @@ class TestExtractSupermarketFlyersDataTask:
         assert len(saved_data["items"]) == 2
         assert mock_client.models.generate_content.call_count == 2
 
+    @patch.object(generate_content_with_retry.retry, "sleep")
     @patch.object(extract_supermarket_flyers_data, "retry")
     @patch("app.tasks.genai.Client")
-    def test_429_per_minute(self, mock_genai_client, mock_retry, tmp_path):
+    def test_429_per_minute(self, mock_genai_client, mock_retry, mock_sleep, tmp_path):
         """MC/DC: retries with 60s delay when HTTP 429 contains 'PerMinute' rate limit error."""
         market_folder = tmp_path / "market_429_min"
         market_folder.mkdir()
@@ -374,9 +375,10 @@ class TestExtractSupermarketFlyersDataTask:
 
         mock_retry.assert_called_once_with(exc=error_429_min, countdown=60, max_retries=None)
 
+    @patch.object(generate_content_with_retry.retry, "sleep")
     @patch.object(extract_supermarket_flyers_data, "retry")
     @patch("app.tasks.genai.Client")
-    def test_429_per_day(self, mock_genai_client, mock_retry, tmp_path):
+    def test_429_per_day(self, mock_genai_client, mock_retry, mock_sleep, tmp_path):
         """MC/DC: retries with 86400s (24h) delay when HTTP 429 daily quota is exceeded."""
         market_folder = tmp_path / "market_429_day"
         market_folder.mkdir()
@@ -393,8 +395,9 @@ class TestExtractSupermarketFlyersDataTask:
 
         mock_retry.assert_called_once_with(exc=error_429_day, countdown=86400, max_retries=None)
 
+    @patch.object(generate_content_with_retry.retry, "sleep")
     @patch("app.tasks.genai.Client")
-    def test_other_exception(self, mock_genai_client, tmp_path):
+    def test_other_exception(self, mock_genai_client, mock_sleep, tmp_path):
         """MC/DC: raises exception directly when error is not an HTTP 429 rate limit."""
         market_folder = tmp_path / "market_500"
         market_folder.mkdir()

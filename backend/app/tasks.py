@@ -125,14 +125,14 @@ def extract_supermarket_flyers_data(self, market_folder: str):
         logger.error(f"Supermarket flyer path not found: {market_folder}")
         return {"status": "error", "reason": "Path not found"}
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp"}
     images = sorted([f for f in target.iterdir() if f.suffix.lower() in valid_extensions])
 
     if not images:
         logger.info(f"No flyer images found in path: {market_folder}")
         return {"status": "skipped", "reason": "No images found"}
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     mime_types_map = {
         ".jpg": "image/jpeg",
