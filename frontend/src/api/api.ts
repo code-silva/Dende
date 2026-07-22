@@ -1,13 +1,42 @@
+import type { MyListState } from "../types/list";
 import { fetchMarkets } from "./markets";
 import { fetchProducts } from "./products";
-import type { MyListState } from "../types/list";
 
-export function fetchNearbyMarkets(latitude?: number, longitude?: number) {
-  return fetchMarkets(latitude, longitude);
+const PRE_FETCH_TIMEOUT_MS = 8000;
+
+function fetchWithTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error("Tempo limite excedido. Verifique sua conexão.")),
+        ms,
+      ),
+    ),
+  ]);
 }
 
-export function fetchHomeHighlights(latitude?: number, longitude?: number) {
-  return fetchProducts(latitude, longitude, 1);
+export function fetchNearbyMarkets(
+  latitude?: number,
+  longitude?: number,
+  signal?: AbortSignal,
+) {
+  return fetchWithTimeout(
+    fetchMarkets(latitude, longitude, signal),
+    PRE_FETCH_TIMEOUT_MS,
+  );
+}
+
+export function fetchHomeHighlights(
+  latitude?: number,
+  longitude?: number,
+  signal?: AbortSignal,
+) {
+  return fetchWithTimeout(
+    fetchProducts(latitude, longitude, 1, undefined, undefined, signal),
+    PRE_FETCH_TIMEOUT_MS,
+  );
 }
 
 export function fetchMyListInitialState(): Promise<MyListState> {
@@ -21,3 +50,5 @@ export function fetchMyListInitialState(): Promise<MyListState> {
     }, 1000);
   });
 }
+
+export { PRE_FETCH_TIMEOUT_MS };

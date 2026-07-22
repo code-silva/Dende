@@ -3,22 +3,19 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { BottomNavbar } from "./src/components/BottomNavbar";
-// Hooks and Screens
-import { useLoadFonts } from "./src/hooks/useLoadFonts";
-import { OnboardingLocal } from "./src/screens/OnboardingScreen";
-import Splash from "./src/screens/SplashScreen";
-// Pre-fetching API and global store
 import {
   fetchHomeHighlights,
   fetchMyListInitialState,
   fetchNearbyMarkets,
 } from "./src/api/api";
+import { BottomNavbar } from "./src/components/BottomNavbar";
+import { useLoadFonts } from "./src/hooks/useLoadFonts";
+import { OnboardingLocal } from "./src/screens/OnboardingScreen";
+import Splash from "./src/screens/SplashScreen";
 import { useAppStore } from "./src/store/useAppStore";
 
-// Prevent the splash screen from hiding automatically while fonts load
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
@@ -28,8 +25,10 @@ export default function App() {
   const [location, setLocation] = useState<Location.LocationObject | null>(
     null,
   );
-  const [triedToGetLocation, setTriedToGetLocation] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [animationEnded, setAnimationEnded] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [isSplashFinished, setIsSplashFinished] = useState(false);
 
   const setMarkets = useAppStore((state) => state.setMarkets);
@@ -38,23 +37,32 @@ export default function App() {
   const setInitialDataLoaded = useAppStore(
     (state) => state.setInitialDataLoaded,
   );
+  const setPreFetchError = useAppStore((state) => state.setPreFetchError);
+  const setIsRetrying = useAppStore((state) => state.setIsRetrying);
 
-  // Hide native splash screen as soon as fonts are loaded
+  const abortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
-  // Obtaining user's location, pre-fetching data, and checking onboarding status
-  useEffect(() => {
-    async function initializeApp() {
-      let latitude: number | undefined;
-      let longitude: number | undefined;
+  const runPreFetch = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      // Location request
+    setDataError(null);
+    setDataReady(false);
+    setPreFetchError(null);
+
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+
+    try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
+      if (status === "granted" && !controller.signal.aborted) {
         const currentLocation = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Highest,
         });
@@ -62,45 +70,92 @@ export default function App() {
         latitude = currentLocation.coords.latitude;
         longitude = currentLocation.coords.longitude;
       }
-      setTriedToGetLocation(true);
+    } catch {
+      // location permission denied — proceed with undefined coords
+    }
 
-      // Pre-fetch data in parallel
-      try {
-        const [markets, highlights, myList] = await Promise.all([
-          fetchNearbyMarkets(latitude, longitude),
-          fetchHomeHighlights(latitude, longitude),
-          fetchMyListInitialState(),
-        ]);
+    if (controller.signal.aborted) return;
 
-        setMarkets(markets);
-        setHomeHighlights(highlights?.results ?? []);
-        setMyList(myList);
-      } catch (error) {
-        console.error("Error during pre-fetch:", error);
-      } finally {
-        setInitialDataLoaded(true);
-      }
-
-      // Onboarding check
+    const onboardingPromise = (async () => {
       try {
         const hasSeenOnboarding =
           await AsyncStorage.getItem("hasSeenOnboarding");
         setShowOnboarding(hasSeenOnboarding !== "true");
-      } catch (error) {
-        console.error("Error checking onboarding status:", error);
+      } catch {
         setShowOnboarding(false);
       }
-    }
+    })();
 
-    initializeApp();
+    try {
+      const [markets, highlights, myList] = await Promise.all([
+        fetchNearbyMarkets(latitude, longitude, controller.signal),
+        fetchHomeHighlights(latitude, longitude, controller.signal),
+        fetchMyListInitialState(),
+      ]);
+
+      if (controller.signal.aborted) return;
+
+      await onboardingPromise;
+
+      setMarkets(markets);
+      setHomeHighlights(highlights?.results ?? []);
+      setMyList(myList);
+      setDataReady(true);
+      setInitialDataLoaded(true);
+    } catch {
+      if (controller.signal.aborted) return;
+      await onboardingPromise;
+      setDataError(
+        "🌐 Parece que você está sem internet. Verifique sua conexão para carregar as melhores ofertas do Dendê!",
+      );
+      setPreFetchError(
+        "🌐 Parece que você está sem internet. Verifique sua conexão para carregar as melhores ofertas do Dendê!",
+      );
+    } finally {
+      if (!controller.signal.aborted) {
+        setInitialDataLoaded(true);
+      }
+    }
+  }, [
+    setMarkets,
+    setHomeHighlights,
+    setMyList,
+    setInitialDataLoaded,
+    setPreFetchError,
+  ]);
+
+  useEffect(() => {
+    runPreFetch();
+    return () => abortRef.current?.abort();
+  }, [runPreFetch]);
+
+  const handleAnimationEnd = useCallback(() => {
+    setAnimationEnded(true);
   }, []);
+
+  const handleRetry = useCallback(() => {
+    setIsRetrying(true);
+    runPreFetch().finally(() => setIsRetrying(false));
+  }, [runPreFetch, setIsRetrying]);
+
+  useEffect(() => {
+    if (animationEnded && dataReady) {
+      setIsSplashFinished(true);
+    }
+  }, [animationEnded, dataReady]);
 
   if (!fontsLoaded) {
     return null;
   }
 
   if (!isSplashFinished) {
-    return <Splash onAnimationEnd={() => setIsSplashFinished(true)} />;
+    return (
+      <Splash
+        onAnimationEnd={handleAnimationEnd}
+        error={dataError}
+        onRetry={handleRetry}
+      />
+    );
   }
 
   return (

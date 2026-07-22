@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -7,6 +7,7 @@ import {
   Image,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -33,9 +34,15 @@ const LOADING_ITEMS = [
 
 interface SplashScreenProps {
   onAnimationEnd: () => void;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-export default function SplashScreen({ onAnimationEnd }: SplashScreenProps) {
+export default function SplashScreen({
+  onAnimationEnd,
+  error,
+  onRetry,
+}: SplashScreenProps) {
   const [phase, setPhase] = useState<"brand" | "loading">("brand");
   const [loadingIndex, setLoadingIndex] = useState(0);
 
@@ -65,7 +72,7 @@ export default function SplashScreen({ onAnimationEnd }: SplashScreenProps) {
         setPhase("loading");
       }, 2000);
     });
-  }, []);
+  }, [brandScale, brandOpacity]);
 
   useEffect(() => {
     if (phase !== "loading") return;
@@ -90,7 +97,7 @@ export default function SplashScreen({ onAnimationEnd }: SplashScreenProps) {
     }).start(() => {
       onAnimationEnd();
     });
-  }, [phase]);
+  }, [phase, onAnimationEnd, brandFade, progressScaleX, loadingOpacity]);
 
   useEffect(() => {
     if (phase !== "loading") return;
@@ -107,7 +114,7 @@ export default function SplashScreen({ onAnimationEnd }: SplashScreenProps) {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [loadingIndex, phase]);
+  }, [loadingIndex, phase, iconFade.setValue, iconFade]);
 
   const currentItem = LOADING_ITEMS[loadingIndex];
 
@@ -179,6 +186,22 @@ export default function SplashScreen({ onAnimationEnd }: SplashScreenProps) {
             />
           </View>
         </Animated.View>
+
+        {/* Error overlay */}
+        {error && (
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorIcon}>!</Text>
+            <Text style={styles.errorTitle}>Falha na conexão</Text>
+            <Text style={styles.errorMessage}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={onRetry}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </LinearGradient>
     </View>
   );
@@ -250,5 +273,52 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 3,
     transformOrigin: "left",
+  },
+  errorOverlay: {
+    position: "absolute",
+    inset: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(23, 109, 118, 0.95)",
+    paddingHorizontal: 32,
+  },
+  errorIcon: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#FFD54F",
+    marginBottom: 12,
+    width: 64,
+    height: 64,
+    lineHeight: 64,
+    textAlign: "center",
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: "#FFD54F",
+    overflow: "hidden",
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: "#E0F7FA",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  retryButton: {
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 24,
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#176D76",
   },
 });
