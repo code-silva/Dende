@@ -1,11 +1,11 @@
-import type { Market } from "../types/market";
 import {
-  fetchNearbyMarkets,
   fetchHomeHighlights,
   fetchMyListInitialState,
+  fetchNearbyMarkets,
 } from "../api/api";
 import { fetchMarkets } from "../api/markets";
 import { fetchProducts } from "../api/products";
+import type { Market } from "../types/market";
 
 jest.mock("../api/markets");
 jest.mock("../api/products");
@@ -29,7 +29,10 @@ describe("fetchNearbyMarkets", () => {
   });
 
   it("calls fetchMarkets with coordinates and returns markets", async () => {
-    const mockMarkets = [makeMarket(1, "Supermarket A"), makeMarket(2, "Supermarket B")];
+    const mockMarkets = [
+      makeMarket(1, "Supermarket A"),
+      makeMarket(2, "Supermarket B"),
+    ];
     mockedFetchMarkets.mockResolvedValue(mockMarkets);
 
     const result = await fetchNearbyMarkets(-23.5, -46.6);
@@ -65,8 +68,28 @@ describe("fetchHomeHighlights", () => {
   it("calls fetchProducts with page=1 and returns offers", async () => {
     const mockOffers = {
       results: [
-        { id: 1, productName: "Arroz", price: "R$ 5,00", marketName: "Mercado A", brand: "Brand A", image: "img1.jpg", measurementUnit: "kg", measurement: "1", categoryName: "Grãos" },
-        { id: 2, productName: "Feijão", price: "R$ 7,50", marketName: "Mercado B", brand: "Brand B", image: "img2.jpg", measurementUnit: "kg", measurement: "1", categoryName: "Grãos" },
+        {
+          id: 1,
+          productName: "Arroz",
+          price: "R$ 5,00",
+          marketName: "Mercado A",
+          brand: "Brand A",
+          image: "img1.jpg",
+          measurementUnit: "kg",
+          measurement: "1",
+          categoryName: "Grãos",
+        },
+        {
+          id: 2,
+          productName: "Feijão",
+          price: "R$ 7,50",
+          marketName: "Mercado B",
+          brand: "Brand B",
+          image: "img2.jpg",
+          measurementUnit: "kg",
+          measurement: "1",
+          categoryName: "Grãos",
+        },
       ],
     };
     mockedFetchProducts.mockResolvedValue(mockOffers);

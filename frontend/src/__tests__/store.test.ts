@@ -1,7 +1,7 @@
+import { useAppStore } from "../store/useAppStore";
+import type { MyListState } from "../types/list";
 import type { Market } from "../types/market";
 import type { Product } from "../types/product";
-import type { MyListState } from "../types/list";
-import { useAppStore } from "../store/useAppStore";
 
 const initialState = {
   markets: [],
@@ -48,10 +48,7 @@ describe("useAppStore", () => {
   });
 
   it("updates homeHighlights via setHomeHighlights", () => {
-    const mockHighlights = [
-      makeProduct(1, "Arroz"),
-      makeProduct(2, "Feijão"),
-    ];
+    const mockHighlights = [makeProduct(1, "Arroz"), makeProduct(2, "Feijão")];
 
     useAppStore.getState().setHomeHighlights(mockHighlights);
 
