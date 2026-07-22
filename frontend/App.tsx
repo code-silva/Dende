@@ -9,6 +9,7 @@ import { BottomNavbar } from "./src/components/BottomNavbar";
 // Hooks and Screens
 import { useLoadFonts } from "./src/hooks/useLoadFonts";
 import { OnboardingLocal } from "./src/screens/OnboardingScreen";
+import Splash from "./src/screens/SplashScreen";
 // Pre-fetching API and global store
 import {
   fetchHomeHighlights,
@@ -29,6 +30,7 @@ export default function App() {
   );
   const [triedToGetLocation, setTriedToGetLocation] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [isSplashFinished, setIsSplashFinished] = useState(false);
 
   const setMarkets = useAppStore((state) => state.setMarkets);
   const setHomeHighlights = useAppStore((state) => state.setHomeHighlights);
@@ -36,6 +38,13 @@ export default function App() {
   const setInitialDataLoaded = useAppStore(
     (state) => state.setInitialDataLoaded,
   );
+
+  // Hide native splash screen as soon as fonts are loaded
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
 
   // Obtaining user's location, pre-fetching data, and checking onboarding status
   useEffect(() => {
@@ -86,13 +95,17 @@ export default function App() {
     initializeApp();
   }, []);
 
-  if (!fontsLoaded || !triedToGetLocation || showOnboarding === null) {
+  if (!fontsLoaded) {
     return null;
+  }
+
+  if (!isSplashFinished) {
+    return <Splash onAnimationEnd={() => setIsSplashFinished(true)} />;
   }
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer onReady={() => SplashScreen.hideAsync()}>
+      <NavigationContainer>
         <Stack.Navigator
           id="rootStack"
           initialRouteName={showOnboarding ? "OnboardingLocal" : "MainTabs"}

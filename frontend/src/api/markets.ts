@@ -13,5 +13,6 @@ export async function fetchMarkets(
   url.searchParams.append("longitude", String(longitude));
 
   const response = await fetch(url);
-  return (await response.json()) as Market[];
+  const data = await response.json();
+  return data.results as Market[];
 }
