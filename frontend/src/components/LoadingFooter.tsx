@@ -1,4 +1,4 @@
-import type React from "react";
+import { memo } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 interface LoadingFooterProps {
@@ -6,10 +6,10 @@ interface LoadingFooterProps {
   message?: string;
 }
 
-export const LoadingFooter: React.FC<LoadingFooterProps> = ({
+export const LoadingFooter = memo(function LoadingFooter({
   isLoading,
   message = "Carregando mais ofertas...",
-}) => {
+}: LoadingFooterProps) {
   if (!isLoading) return null;
 
   return (
@@ -18,7 +18,7 @@ export const LoadingFooter: React.FC<LoadingFooterProps> = ({
       <Text style={styles.text}>{message}</Text>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   fetchHomeHighlights,
@@ -30,6 +31,7 @@ export default function App() {
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isSplashFinished, setIsSplashFinished] = useState(false);
+  const [isNavigable, setIsNavigable] = useState(false);
 
   const setMarkets = useAppStore((state) => state.setMarkets);
   const setHomeHighlights = useAppStore((state) => state.setHomeHighlights);
@@ -47,6 +49,18 @@ export default function App() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    AsyncStorage.getItem("hasSeenOnboarding")
+      .then((val) => setShowOnboarding(val !== "true"))
+      .catch(() => setShowOnboarding(false));
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded && showOnboarding !== null) {
+      setIsNavigable(true);
+    }
+  }, [fontsLoaded, showOnboarding]);
 
   const runPreFetch = useCallback(async () => {
     abortRef.current?.abort();
@@ -76,16 +90,6 @@ export default function App() {
 
     if (controller.signal.aborted) return;
 
-    const onboardingPromise = (async () => {
-      try {
-        const hasSeenOnboarding =
-          await AsyncStorage.getItem("hasSeenOnboarding");
-        setShowOnboarding(hasSeenOnboarding !== "true");
-      } catch {
-        setShowOnboarding(false);
-      }
-    })();
-
     try {
       const [markets, highlights, myList] = await Promise.all([
         fetchNearbyMarkets(latitude, longitude, controller.signal),
@@ -95,8 +99,6 @@ export default function App() {
 
       if (controller.signal.aborted) return;
 
-      await onboardingPromise;
-
       setMarkets(markets);
       setHomeHighlights(highlights?.results ?? []);
       setMyList(myList);
@@ -104,7 +106,6 @@ export default function App() {
       setInitialDataLoaded(true);
     } catch {
       if (controller.signal.aborted) return;
-      await onboardingPromise;
       setDataError(
         "🌐 Parece que você está sem internet. Verifique sua conexão para carregar as melhores ofertas do Dendê!",
       );
@@ -144,41 +145,52 @@ export default function App() {
     }
   }, [animationEnded, dataReady]);
 
-  if (!fontsLoaded) {
+  if (!isNavigable) {
     return null;
-  }
-
-  if (!isSplashFinished) {
-    return (
-      <Splash
-        onAnimationEnd={handleAnimationEnd}
-        error={dataError}
-        onRetry={handleRetry}
-      />
-    );
   }
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator
-          id="rootStack"
-          initialRouteName={showOnboarding ? "OnboardingLocal" : "MainTabs"}
-          screenOptions={{
-            headerShown: false,
-            animation: "slide_from_right",
-          }}
-        >
-          {showOnboarding && (
-            <Stack.Screen name="OnboardingLocal">
-              {(props) => <OnboardingLocal {...props} />}
+      <View style={styles.root}>
+        <NavigationContainer>
+          <Stack.Navigator
+            id="rootStack"
+            initialRouteName={showOnboarding ? "OnboardingLocal" : "MainTabs"}
+            screenOptions={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          >
+            {showOnboarding && (
+              <Stack.Screen name="OnboardingLocal">
+                {(props) => <OnboardingLocal {...props} />}
+              </Stack.Screen>
+            )}
+            <Stack.Screen name="MainTabs">
+              {(props) => <BottomNavbar {...props} location={location} />}
             </Stack.Screen>
-          )}
-          <Stack.Screen name="MainTabs">
-            {(props) => <BottomNavbar {...props} location={location} />}
-          </Stack.Screen>
-        </Stack.Navigator>
-      </NavigationContainer>
+          </Stack.Navigator>
+        </NavigationContainer>
+
+        {!isSplashFinished && (
+          <View style={styles.splashOverlay} pointerEvents="auto">
+            <Splash
+              onAnimationEnd={handleAnimationEnd}
+              error={dataError}
+              onRetry={handleRetry}
+            />
+          </View>
+        )}
+      </View>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  splashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

@@ -4,7 +4,7 @@ import {
   useNavigation,
 } from "@react-navigation/native";
 import type * as Location from "expo-location";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchMarkets } from "../api/markets";
@@ -18,7 +18,7 @@ import type { Product } from "../types/product";
 
 // SUPPORT FUNCTIONS
 
-export function HomeScreen({
+export const HomeScreen = memo(function HomeScreen({
   location,
 }: {
   location: Location.LocationObject;
@@ -31,13 +31,12 @@ export function HomeScreen({
     longitude: location?.coords.longitude,
   });
 
-  // ACTION WHEN CLICKING ON PRODUCT
-  const handlePress = useCallback((product: Product) => {
-    console.log("Opened details for:", product.productName);
+  const handlePress = useCallback((_product: Product) => {
+    // TODO: navigate to product detail screen
   }, []);
 
-  const handleAdd = useCallback((product: Product) => {
-    console.log("Added to list:", product.productName);
+  const handleAdd = useCallback((_product: Product) => {
+    // TODO: add to persistent shopping list
   }, []);
 
   // NAVIGATION TO SPECIFIC MARKET SCREEN
@@ -114,7 +113,7 @@ export function HomeScreen({
       />
     </View>
   );
-}
+});
 
 export const styles = StyleSheet.create({
   gridContainer: {

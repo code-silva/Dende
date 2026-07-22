@@ -71,10 +71,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
       )}
       key={`grid-${numColumns}`}
       numColumns={numColumns}
-      //
+      initialNumToRender={numColumns * 3}
+      maxToRenderPerBatch={numColumns * 6}
+      windowSize={9}
       columnWrapperStyle={numColumns > 1 ? styles.rowWrapper : null}
       contentContainerStyle={[styles.listContainer, contentContainerStyle]}
-      //
       onEndReached={onEndReached}
       onEndReachedThreshold={onEndReachedThreshold}
       ListFooterComponent={listFooterComponent}
