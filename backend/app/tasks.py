@@ -9,11 +9,11 @@ from bs4 import BeautifulSoup
 from celery import chord, shared_task
 from django.conf import settings
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .models import Offer
-from .utils import validate_extracted_flyer_json
+from .utils import sanitize_json_response, validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,24 @@ def extract_supermarket_flyers_data(self, market_folder: str):
     """
     Consumes flyer images from a supermarket folder, sending multiple images per request
     to Google Gemini AI. Consolidates the results and saves them to a JSON file.
+
+    Expected output JSON structure (flat, aligned with FlyerExtractionSchema):
+    {
+        "supermarket": "Nome do Mercado",
+        "expiration_date": "YYYY-MM-DD",
+        "items": [
+            {
+                "name": "Arroz Branco",
+                "type": "Varejo",
+                "brand": "Camil",
+                "unit_of_measure": "kg",
+                "measure": 5.0,
+                "price": 21.90,
+                "top_left": [150, 300],
+                "bottom_right": [450, 600]
+            }
+        ]
+    }
     """
 
     target = Path(market_folder)
@@ -163,36 +181,46 @@ def extract_supermarket_flyers_data(self, market_folder: str):
 
             response = generate_content_with_retry(client, GEMINI_MODEL, contents)
 
-            data = json.loads(response.text)
+            sanitized = sanitize_json_response(response.text)
+            data = json.loads(sanitized)
             validated_data = validate_extracted_flyer_json(data)
 
             extracted_batches.append(validated_data)
 
-        except Exception as exception:
-            exception_string = str(exception)
-            if "429" in exception_string:
-                if "PerMinute" in exception_string:
-                    retry_delay_seconds = 60
-                    logger.warning(
-                        f"""Error 429 (PerMinute rate limit exceeded) for {market_folder}.
-                        Re-queuing task for 60 seconds."""
-                    )
-                else:
-                    retry_delay_seconds = 86400
-                    logger.critical(
-                        f"""Error 429 (PerDay daily quota exceeded) for {market_folder}.
-                        Re-queuing task for 24 hours."""
-                    )
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for {market_folder}: {e}")
+            raise self.retry(exc=e, countdown=30)
 
-                raise self.retry(
-                    exc=exception,
-                    countdown=retry_delay_seconds,
-                    max_retries=None,
-                ) from exception
-
-            else:
-                logger.error(f"Error in {market_folder} with {GEMINI_MODEL}: {exception}")
+        except errors.ClientError as e:
+            if e.code != 429:
+                logger.error(f"Client error for {market_folder}: {e}")
                 raise
+
+            status = (e.status or "").lower()
+            message = (e.message or "").lower()
+
+            if "perminute" in message or "rate_limit" in status:
+                retry_delay_seconds = 60
+                logger.warning(
+                    f"Rate limit (per minute) exceeded for {market_folder}."
+                    f" Re-queuing task for {retry_delay_seconds} seconds."
+                )
+            else:
+                retry_delay_seconds = 86400
+                logger.critical(
+                    f"Daily quota exceeded for {market_folder}."
+                    f" Re-queuing task for {retry_delay_seconds} seconds."
+                )
+
+            raise self.retry(
+                exc=e,
+                countdown=retry_delay_seconds,
+                max_retries=None,
+            ) from e
+
+        except Exception as exception:
+            logger.error(f"Error in {market_folder} with {GEMINI_MODEL}: {exception}")
+            raise
 
     global_supermarket = None
     global_expiration = None

@@ -14,6 +14,7 @@ from app.tasks import (
     scrap_home_page,
     scrap_supermarket_page,
 )
+from google.genai import errors as genai_errors
 
 FIXTURES_DIRECTORY = Path(__file__).parent.parent / "fixtures"
 
@@ -366,7 +367,15 @@ class TestExtractSupermarketFlyersDataTask:
 
         mock_client = MagicMock()
         mock_genai_client.return_value = mock_client
-        error_429_min = Exception("429 ResourceExhausted: PerMinute rate limit exceeded")
+        error_429_min = genai_errors.ClientError(
+            code=429,
+            response_json={
+                "error": {
+                    "status": "RATE_LIMIT_EXCEEDED",
+                    "message": "PerMinute rate limit exceeded",
+                }
+            },
+        )
         mock_client.models.generate_content.side_effect = error_429_min
         mock_retry.side_effect = Retry("Re-queued for 60s")
 
@@ -386,7 +395,15 @@ class TestExtractSupermarketFlyersDataTask:
 
         mock_client = MagicMock()
         mock_genai_client.return_value = mock_client
-        error_429_day = Exception("429 ResourceExhausted: PerDay daily quota exceeded")
+        error_429_day = genai_errors.ClientError(
+            code=429,
+            response_json={
+                "error": {
+                    "status": "RESOURCE_EXHAUSTED",
+                    "message": "PerDay daily quota exceeded",
+                }
+            },
+        )
         mock_client.models.generate_content.side_effect = error_429_day
         mock_retry.side_effect = Retry("Re-queued for 24h")
 
