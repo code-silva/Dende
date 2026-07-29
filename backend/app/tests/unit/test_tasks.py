@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from celery.exceptions import Retry
+from google.genai import errors as genai_errors
 
 from app.models import Offer
 from app.tasks import (
@@ -14,7 +15,6 @@ from app.tasks import (
     scrap_home_page,
     scrap_supermarket_page,
 )
-from google.genai import errors as genai_errors
 
 FIXTURES_DIRECTORY = Path(__file__).parent.parent / "fixtures"
 

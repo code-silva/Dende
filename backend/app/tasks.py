@@ -189,7 +189,7 @@ def extract_supermarket_flyers_data(self, market_folder: str):
 
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error for {market_folder}: {e}")
-            raise self.retry(exc=e, countdown=30)
+            raise self.retry(exc=e, countdown=30) from e
 
         except errors.ClientError as e:
             if e.code != 429:

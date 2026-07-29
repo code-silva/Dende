@@ -1,5 +1,3 @@
-import pytest
-
 from app.utils import sanitize_json_response
 
 
