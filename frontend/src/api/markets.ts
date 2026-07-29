@@ -9,6 +9,7 @@ export async function fetchMarkets(
   longitude?: number,
   address?: string,
   city?: string | null,
+  radiusInKm?: number,
   signal?: AbortSignal,
 ): Promise<Market[]> {
   const url = new URL(`${BASE_URL}/nearby-markets/`);
@@ -16,6 +17,8 @@ export async function fetchMarkets(
   url.searchParams.append("longitude", String(longitude));
   if (address) url.searchParams.append("address", address);
   if (city) url.searchParams.append("city", city);
+  if (radiusInKm != null)
+    url.searchParams.append("radiusInKm", String(radiusInKm));
 
   const response = await fetch(url, { signal });
   const data = await response.json();
@@ -27,10 +30,11 @@ export async function fetchSupermarkets(
   longitude?: number,
   address?: string,
   city?: string | null,
+  radiusInKm?: number,
   signal?: AbortSignal,
 ): Promise<Market[]> {
   return Promise.race([
-    fetchMarkets(latitude, longitude, address, city, signal),
+    fetchMarkets(latitude, longitude, address, city, radiusInKm, signal),
     new Promise<never>((_, reject) =>
       setTimeout(
         () =>

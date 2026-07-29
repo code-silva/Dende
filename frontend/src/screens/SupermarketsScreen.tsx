@@ -12,8 +12,10 @@ import { MarketList } from "../components/MarketList";
 import { SearchBar } from "../components/SearchBar";
 import type { Market } from "../types/market";
 
-const DISTANCE_LIMIT_KM = 10;
 const SEARCH_DEBOUNCE_MS = 500;
+
+const RECOMMENDATION_RADIUS_KM = 10;
+const SEARCH_RADIUS_KM = 30;
 
 interface SupermarketsScreenProps {
   location: Location.LocationObject | null;
@@ -36,26 +38,32 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   selectedRegionRef.current = selectedRegion;
 
   const fetchSupermarketsData = useCallback(
-    async (address?: string, city?: string | null) => {
+    async (address?: string, city?: string | null, silent?: boolean) => {
       if (!location) return;
 
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      const hasActiveSearch = !!address?.trim();
-      if (hasActiveSearch) {
-        setIsSearching(true);
-      } else {
-        setIsLoading(true);
+      if (!silent) {
+        const hasActiveSearch = !!address?.trim();
+        if (hasActiveSearch) {
+          setIsSearching(true);
+        } else {
+          setIsLoading(true);
+        }
       }
 
       try {
+        const radiusInKm = address?.trim()
+          ? SEARCH_RADIUS_KM
+          : RECOMMENDATION_RADIUS_KM;
         const data = await fetchSupermarkets(
           location.coords.latitude,
           location.coords.longitude,
           address,
           city,
+          radiusInKm,
           controller.signal,
         );
 
@@ -67,10 +75,8 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
         console.error("Erro ao buscar mercados:", error);
         setMarkets([]);
       } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-          setIsSearching(false);
-        }
+        setIsLoading(false);
+        setIsSearching(false);
       }
     },
     [location],
@@ -85,7 +91,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     const currentSearch = searchTextRef.current;
 
     if (!currentSearch.trim()) {
-      fetchSupermarketsData(undefined, selectedRegionRef.current);
+      fetchSupermarketsData(undefined, selectedRegionRef.current, true);
       return;
     }
 
@@ -100,24 +106,8 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     };
   }, [searchText]);
 
-  const validMarkets = useMemo(
-    () =>
-      markets
-        .filter(
-          (m) =>
-            m.distanceInKilometers != null &&
-            m.distanceInKilometers <= DISTANCE_LIMIT_KM,
-        )
-        .sort(
-          (a, b) =>
-            (a.distanceInKilometers ?? Infinity) -
-            (b.distanceInKilometers ?? Infinity),
-        ),
-    [markets],
-  );
-
   const filteredMarkets = useMemo(() => {
-    let result = validMarkets;
+    let result = markets;
 
     if (selectedRegion) {
       const regionLower = selectedRegion.toLowerCase();
@@ -138,7 +128,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     }
 
     return result;
-  }, [validMarkets, searchText, selectedRegion]);
+  }, [markets, searchText, selectedRegion]);
 
   const listHeader = useMemo(
     () => (

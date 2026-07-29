@@ -55,8 +55,15 @@ class HybridSearchView(APIView):
 
 class BranchSupermarketListView(generics.ListAPIView):
     """
-    View responsible for returning supermarkets to the frontend, within a radius of up to 5km
-    from the user. This view ALWAYS returns a list of objects.
+    View responsible for returning supermarkets to the frontend.
+    Default radius is 10km for recommendations; expanded to 30km when
+    an address/search term is provided.
+
+    Query params:
+      - latitude, longitude (required for distance calculation)
+      - address (optional search term, triggers expanded radius)
+      - city (optional exact city filter)
+      - radiusInKm (optional override, e.g. "30")
     """
 
     serializer_class = BranchSupermarketSerializer
@@ -67,6 +74,7 @@ class BranchSupermarketListView(generics.ListAPIView):
         user_longitude = self.request.query_params.get("longitude")
         city_filter = self.request.query_params.get("city")
         address_search = self.request.query_params.get("address")
+        radius_override = self.request.query_params.get("radiusInKm")
 
         queryset = (
             BranchSupermarket.objects.select_related(
@@ -90,9 +98,15 @@ class BranchSupermarketListView(generics.ListAPIView):
         except (ValueError, TypeError):
             return queryset.order_by("parent_supermarket__name")
 
-        MAXIMUM_RADIUS_METERS = 5000
+        if radius_override:
+            radius_meters = float(radius_override) * 1000
+        elif address_search:
+            radius_meters = 30000
+        else:
+            radius_meters = 10000
+
         results = (
-            queryset.filter(coordinates__dwithin=(user_location, MAXIMUM_RADIUS_METERS))
+            queryset.filter(coordinates__dwithin=(user_location, radius_meters))
             .annotate(distance=Distance("coordinates", user_location))
             .order_by("distance")
         )
