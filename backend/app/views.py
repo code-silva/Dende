@@ -65,6 +65,8 @@ class BranchSupermarketListView(generics.ListAPIView):
     def get_queryset(self):
         user_latitude = self.request.query_params.get("latitude")
         user_longitude = self.request.query_params.get("longitude")
+        city_filter = self.request.query_params.get("city")
+        address_search = self.request.query_params.get("address")
 
         queryset = (
             BranchSupermarket.objects.select_related(
@@ -73,6 +75,15 @@ class BranchSupermarketListView(generics.ListAPIView):
             .filter(product_offers__offer__expiration_date__gte=timezone.now().date())
             .distinct()
         )
+
+        if city_filter:
+            queryset = queryset.filter(city__iexact=city_filter)
+
+        if address_search:
+            queryset = queryset.filter(
+                Q(address__icontains=address_search)
+                | Q(parent_supermarket__name__icontains=address_search)
+            )
 
         try:
             user_location = Point(float(user_longitude), float(user_latitude), srid=4326)

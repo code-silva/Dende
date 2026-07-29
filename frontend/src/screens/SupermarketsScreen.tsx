@@ -4,15 +4,16 @@ import {
   useNavigation,
 } from "@react-navigation/native";
 import type * as Location from "expo-location";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchMarkets } from "../api/markets";
+import { fetchSupermarkets } from "../api/markets";
 import { MarketList } from "../components/MarketList";
 import { SearchBar } from "../components/SearchBar";
 import type { Market } from "../types/market";
 
 const DISTANCE_LIMIT_KM = 10;
+const SEARCH_DEBOUNCE_MS = 500;
 
 interface SupermarketsScreenProps {
   location: Location.LocationObject | null;
@@ -23,30 +24,81 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  // biome-ignore lint/correctness/noUnusedVariables: setter will be used when region filter UI is implemented
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    async function loadMarkets() {
+  const searchTextRef = useRef(searchText);
+  searchTextRef.current = searchText;
+  const selectedRegionRef = useRef(selectedRegion);
+  selectedRegionRef.current = selectedRegion;
+
+  const fetchSupermarketsData = useCallback(
+    async (address?: string, city?: string | null) => {
       if (!location) return;
 
-      setIsLoading(true);
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const hasActiveSearch = !!address?.trim();
+      if (hasActiveSearch) {
+        setIsSearching(true);
+      } else {
+        setIsLoading(true);
+      }
+
       try {
-        const data = await fetchMarkets(
+        const data = await fetchSupermarkets(
           location.coords.latitude,
           location.coords.longitude,
+          address,
+          city,
+          controller.signal,
         );
 
-        setMarkets(data);
+        if (!controller.signal.aborted) {
+          setMarkets(data);
+        }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error("Erro ao buscar mercados:", error);
         setMarkets([]);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setIsSearching(false);
+        }
       }
+    },
+    [location],
+  );
+
+  useEffect(() => {
+    fetchSupermarketsData(searchTextRef.current || undefined, selectedRegion);
+  }, [fetchSupermarketsData, selectedRegion]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchSupermarketsData is stable (useCallback); selectedRegion read from ref to avoid triggering on region change (handled by Effect 1)
+  useEffect(() => {
+    const currentSearch = searchTextRef.current;
+
+    if (!currentSearch.trim()) {
+      fetchSupermarketsData(undefined, selectedRegionRef.current);
+      return;
     }
 
-    loadMarkets();
-  }, [location]);
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      fetchSupermarketsData(currentSearch, selectedRegionRef.current);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+      setIsSearching(false);
+    };
+  }, [searchText]);
 
   const validMarkets = useMemo(
     () =>
@@ -65,10 +117,28 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   );
 
   const filteredMarkets = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return validMarkets;
-    return validMarkets.filter((m) => m.name.toLowerCase().includes(query));
-  }, [validMarkets, searchQuery]);
+    let result = validMarkets;
+
+    if (selectedRegion) {
+      const regionLower = selectedRegion.toLowerCase();
+      result = result.filter(
+        (m) =>
+          m.city.toLowerCase() === regionLower ||
+          m.state.toLowerCase() === regionLower,
+      );
+    }
+
+    const query = searchText.trim().toLowerCase();
+    if (query) {
+      result = result.filter(
+        (m) =>
+          m.address.toLowerCase().includes(query) ||
+          m.name.toLowerCase().includes(query),
+      );
+    }
+
+    return result;
+  }, [validMarkets, searchText, selectedRegion]);
 
   const listHeader = useMemo(
     () => (
@@ -109,7 +179,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
       <View style={styles.searchWrapper}>
         <SearchBar
           placeholder="Buscar mercados..."
-          onChangeText={setSearchQuery}
+          onChangeText={setSearchText}
           disableApiSearch
         />
       </View>
@@ -121,7 +191,9 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
         listEmptyComponent={
           <View style={styles.centered}>
             <Text style={styles.emptyText}>
-              Nenhum mercado com ofertas encontrado nesta região.
+              {isSearching
+                ? "Buscando mercados..."
+                : "Nenhum mercado com ofertas encontrado nesta região."}
             </Text>
           </View>
         }
