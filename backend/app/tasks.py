@@ -13,7 +13,7 @@ from google.genai import errors, types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .models import Offer
-from .utils import sanitize_json_response, validate_extracted_flyer_json
+from .utils import validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
 
@@ -181,8 +181,7 @@ def extract_supermarket_flyers_data(self, market_folder: str):
 
             response = generate_content_with_retry(client, GEMINI_MODEL, contents)
 
-            sanitized = sanitize_json_response(response.text)
-            data = json.loads(sanitized)
+            data = json.loads(response.text)
             validated_data = validate_extracted_flyer_json(data)
 
             extracted_batches.append(validated_data)
@@ -192,14 +191,12 @@ def extract_supermarket_flyers_data(self, market_folder: str):
             raise self.retry(exc=e, countdown=30) from e
 
         except errors.ClientError as e:
-            if e.code != 429:
+            error_str = str(e)
+            if "429" not in error_str:
                 logger.error(f"Client error for {market_folder}: {e}")
                 raise
 
-            status = (e.status or "").lower()
-            message = (e.message or "").lower()
-
-            if "perminute" in message or "rate_limit" in status:
+            if "perminute" in error_str.lower():
                 retry_delay_seconds = 60
                 logger.warning(
                     f"Rate limit (per minute) exceeded for {market_folder}."

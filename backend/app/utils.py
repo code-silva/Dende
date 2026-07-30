@@ -1,5 +1,3 @@
-import json
-import re
 import unicodedata
 from datetime import date
 from typing import Any
@@ -39,18 +37,6 @@ def validate_extracted_flyer_json(data: Any) -> dict:
 
     validated = FlyerExtractionSchema.model_validate(data)
     return validated.model_dump(mode="json")
-
-
-def sanitize_json_response(text: str) -> str:
-    text = re.sub(r"```json\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"```", "", text)
-    start = text.find("{")
-    if start == -1:
-        return text.strip()
-    text = text[start:]
-    decoder = json.JSONDecoder()
-    obj, _ = decoder.raw_decode(text)
-    return json.dumps(obj)
 
 
 def remove_accents(text: str) -> str:
