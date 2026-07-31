@@ -136,6 +136,9 @@ CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS") == "True"
 
 STATIC_URL = "static/"
 
+# Gemini AI Studio Configuration (Free Tier Models & Quota Settings)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 
 # Celery Config
 CELERY_BROKER_URL = "redis://redis:6379/0"
