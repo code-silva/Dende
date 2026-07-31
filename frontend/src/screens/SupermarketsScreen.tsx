@@ -11,6 +11,7 @@ import { fetchSupermarkets } from "../api/markets";
 import { MarketList } from "../components/MarketList";
 import { SearchBar } from "../components/SearchBar";
 import type { Market } from "../types/market";
+import { searchMarkets } from "../utils/fuzzySearch";
 
 const SEARCH_DEBOUNCE_MS = 500;
 
@@ -118,16 +119,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
       );
     }
 
-    const query = searchText.trim().toLowerCase();
-    if (query) {
-      result = result.filter(
-        (m) =>
-          m.address.toLowerCase().includes(query) ||
-          m.name.toLowerCase().includes(query),
-      );
-    }
-
-    return result;
+    return searchMarkets(result, searchText);
   }, [markets, searchText, selectedRegion]);
 
   const listHeader = useMemo(
