@@ -122,13 +122,18 @@ class TestHybridSearchView:
     URL = reverse("search")
 
     @pytest.mark.parametrize("value", ["", "    "])
-    def test_get_with_invalid_query(self, value, api_client):
+    @pytest.mark.parametrize("scope", [None, "products"])
+    def test_get_with_invalid_query(self, value, scope, api_client):
         """
         Testing the GET method of the view with an invalid query (empty or '').
-        It should return an empty offers array.
+        It should return an empty offers array regardless of the scope.
         """
 
-        response = api_client.get(self.URL, {"query": value})
+        params = {"query": value}
+        if scope:
+            params["scope"] = scope
+
+        response = api_client.get(self.URL, params)
 
         results = response.data["offers"]
 
@@ -149,6 +154,35 @@ class TestHybridSearchView:
 
         assert response.status_code == 200
         assert results == offers_list
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    @pytest.mark.parametrize("value", ["feijao", "sabao"])
+    def test_get_with_valid_query_scope_products_unaccent(self, value, api_client, offers_list):
+        """
+        Testing the scope=products behavior with de-accented queries.
+        It should still find accented products like 'Feijão'.
+        """
+
+        response = api_client.get(self.URL, {"query": value, "scope": "products"})
+
+        results = response.data["offers"]
+
+        assert response.status_code == 200
+        assert len(results) > 0
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    def test_get_scope_products_fuzzy_typo(self, api_client, offers_list):
+        """
+        Testing that scope=products tolerates small typos via trigram similarity.
+        'arroz' should still be found even if typed as 'arroz' or close variants.
+        """
+
+        response = api_client.get(self.URL, {"query": "aroz", "scope": "products"})
+
+        results = response.data["offers"]
+
+        assert response.status_code == 200
+        assert any("arroz" in offer["productName"].lower() for offer in results)
 
 
 @pytest.mark.django_db
