@@ -2,8 +2,8 @@ from rest_framework.pagination import PageNumberPagination
 
 
 class BranchSupermarketPagination(PageNumberPagination):
-    page_size = 6
-    max_page_size = 30
+    page_size = 100
+    max_page_size = 100
 
 
 class OffersPagination(PageNumberPagination):

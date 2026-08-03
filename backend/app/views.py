@@ -98,14 +98,15 @@ class HybridSearchView(APIView):
 class BranchSupermarketListView(generics.ListAPIView):
     """
     View responsible for returning supermarkets to the frontend.
-    Default radius is 10km for recommendations; expanded to 30km when
-    an address/search term is provided.
+    Lists all active markets, ordered by distance from the user.
+    An optional radius (radiusInKm) can restrict results to a configurable
+    distance; when omitted, no distance limit is applied.
 
     Query params:
-      - latitude, longitude (required for distance calculation)
-      - address (optional search term, triggers expanded radius and fuzzy matching)
-      - city (optional exact city filter)
-      - radiusInKm (optional override, e.g. "30")
+      - latitude, longitude (used for distance calculation)
+      - address (optional search term, enables fuzzy matching via pg_trgm)
+      - city (optional accent/case-insensitive city filter)
+      - radiusInKm (optional distance limit, e.g. "30")
     """
 
     serializer_class = BranchSupermarketSerializer
@@ -128,7 +129,7 @@ class BranchSupermarketListView(generics.ListAPIView):
         )
 
         if city_filter:
-            queryset = queryset.filter(city__iexact=city_filter)
+            queryset = queryset.filter(city__unaccent__iexact=city_filter)
 
         # Fuzzy matching on the market name/address (pg_trgm). Small typos
         # ("conper" -> "Comper") and accent variations ("pao" -> "Pão") are
@@ -159,22 +160,40 @@ class BranchSupermarketListView(generics.ListAPIView):
                 return queryset.order_by("-relevance")
             return queryset.order_by("parent_supermarket__name")
 
+        results = queryset.annotate(distance=Distance("coordinates", user_location))
+
+        # Optional configurable radius. When omitted, no distance limit is applied.
         if radius_override:
             radius_meters = float(radius_override) * 1000
-        elif normalized_address:
-            radius_meters = 30000
-        else:
-            radius_meters = 10000
-
-        results = (
-            queryset.filter(coordinates__dwithin=(user_location, radius_meters))
-            .annotate(distance=Distance("coordinates", user_location))
-        )
+            results = results.filter(
+                coordinates__dwithin=(user_location, radius_meters)
+            )
 
         if normalized_address:
             return results.order_by("-relevance", "distance")
 
         return results.order_by("distance")
+
+
+class BranchCityListView(APIView):
+    """
+    View responsible for returning the distinct cities of supermarkets
+    with active (non-expired) offers, ordered alphabetically.
+
+    Query params:
+      - none required
+    """
+
+    def get(self, request):
+        active_cities = (
+            BranchSupermarket.objects.filter(
+                product_offers__offer__expiration_date__gte=timezone.now().date()
+            )
+            .values_list("city", flat=True)
+            .distinct()
+            .order_by("city")
+        )
+        return Response(list(active_cities))
 
 
 class BranchProductOfferListView(generics.ListAPIView):

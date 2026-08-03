@@ -3,19 +3,18 @@ import {
   type ParamListBase,
   useNavigation,
 } from "@react-navigation/native";
-import type * as Location from "expo-location";
+import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetchCities } from "../api/cities";
 import { fetchSupermarkets } from "../api/markets";
+import { CityFilter } from "../components/CityFilter";
 import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketList } from "../components/MarketList";
 import { SearchBar } from "../components/SearchBar";
 import type { Market } from "../types/market";
-import { searchMarkets } from "../utils/fuzzySearch";
-
-const RECOMMENDATION_RADIUS_KM = 10;
-const SEARCH_RADIUS_KM = 30;
+import { normalizeString, searchMarkets } from "../utils/fuzzySearch";
 
 const SEARCH_DEBOUNCE_MS = 500;
 
@@ -27,18 +26,18 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [markets, setMarkets] = useState<Market[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
-  // biome-ignore lint/correctness/noUnusedVariables: setter will be used when region filter UI is implemented
-  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchTextRef = useRef(searchText);
   searchTextRef.current = searchText;
-  const selectedRegionRef = useRef(selectedRegion);
-  selectedRegionRef.current = selectedRegion;
+  const selectedCityRef = useRef(selectedCity);
+  selectedCityRef.current = selectedCity;
 
   const fetchSupermarketsData = useCallback(
     async (address?: string, city?: string | null, silent?: boolean) => {
@@ -58,15 +57,12 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
       }
 
       try {
-        const radiusInKm = address?.trim()
-          ? SEARCH_RADIUS_KM
-          : RECOMMENDATION_RADIUS_KM;
         const data = await fetchSupermarkets(
           location.coords.latitude,
           location.coords.longitude,
           address,
           city,
-          radiusInKm,
+          undefined,
           controller.signal,
         );
 
@@ -88,22 +84,61 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   );
 
   useEffect(() => {
-    fetchSupermarketsData(searchTextRef.current || undefined, selectedRegion);
-  }, [fetchSupermarketsData, selectedRegion]);
+    fetchSupermarketsData(searchTextRef.current || undefined, selectedCity);
+  }, [fetchSupermarketsData, selectedCity]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchSupermarketsData is stable (useCallback); selectedRegion read from ref to avoid triggering on region change (handled by Effect 1)
+  useEffect(() => {
+    let cancelled = false;
+    fetchCities()
+      .then((data) => {
+        if (!cancelled) setCities(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!location) return;
+    let cancelled = false;
+    Location.reverseGeocodeAsync({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    })
+      .then((addresses) => {
+        if (cancelled) return;
+        const geoCity = addresses?.[0]?.city;
+        if (!geoCity) return;
+        const normalized = normalizeString(geoCity);
+        const match = cities.find(
+          (city) => normalizeString(city) === normalized,
+        );
+        if (match) setSelectedCity(match);
+      })
+      .catch(() => {
+        // reverse geocoding failed — keep no city filter
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location, cities]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchSupermarketsData is stable (useCallback); selectedCity read from ref to avoid triggering on city change (handled by Effect 1)
   useEffect(() => {
     const currentSearch = searchTextRef.current;
 
     if (!currentSearch.trim()) {
       setIsSearching(false);
-      fetchSupermarketsData(undefined, selectedRegionRef.current, true);
+      fetchSupermarketsData(undefined, selectedCityRef.current, true);
       return;
     }
 
     setIsSearching(true);
     debounceTimerRef.current = setTimeout(() => {
-      fetchSupermarketsData(currentSearch, selectedRegionRef.current, true);
+      fetchSupermarketsData(currentSearch, selectedCityRef.current, true);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => {
@@ -123,29 +158,19 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
 
       const trimmed = text.trim();
       if (!trimmed) {
-        fetchSupermarketsData(undefined, selectedRegionRef.current, true);
+        fetchSupermarketsData(undefined, selectedCityRef.current, true);
         return;
       }
       setSearchText(trimmed);
-      fetchSupermarketsData(trimmed, selectedRegionRef.current);
+      fetchSupermarketsData(trimmed, selectedCityRef.current);
     },
     [fetchSupermarketsData],
   );
 
-  const filteredMarkets = useMemo(() => {
-    let result = markets;
-
-    if (selectedRegion) {
-      const regionLower = selectedRegion.toLowerCase();
-      result = result.filter(
-        (m) =>
-          m.city.toLowerCase() === regionLower ||
-          m.state.toLowerCase() === regionLower,
-      );
-    }
-
-    return searchMarkets(result, searchText);
-  }, [markets, searchText, selectedRegion]);
+  const filteredMarkets = useMemo(
+    () => searchMarkets(markets, searchText),
+    [markets, searchText],
+  );
 
   const listHeader = useMemo(
     () => (
@@ -190,6 +215,11 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
           onSearch={handleSearchSubmit}
           disableApiSearch
         />
+        <CityFilter
+          cities={cities}
+          selectedCity={selectedCity}
+          onSelectCity={setSelectedCity}
+        />
       </View>
 
       {isSearching ? (
@@ -204,7 +234,9 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
           listEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.emptyText}>
-                Nenhum mercado com ofertas encontrado nesta região.
+                {selectedCity
+                  ? "Sem mercados ativos nessa região."
+                  : "Nenhum mercado com ofertas encontrado nesta região."}
               </Text>
             </View>
           }

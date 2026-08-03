@@ -119,6 +119,80 @@ class TestBranchSupermarketListView:
 
         assert branch_with_mixed_offers.parent_supermarket.name in names
 
+    def test_returns_markets_beyond_default_radius(self, api_client, db):
+        """
+        Testing that all active markets are returned ordered by distance,
+        regardless of distance, when no radiusInKm is provided.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        for name, longitude, latitude in [
+            ("Near", -47.9292, -15.7801),
+            ("Far", -47.8, -16.0),
+        ]:
+            parent = baker.make(ParentSupermarket, name=name)
+            branch = baker.make(
+                BranchSupermarket,
+                parent_supermarket=parent,
+                state="DF",
+                city="Gama",
+                address=f"{name}, QI 01",
+                coordinates=Point(longitude, latitude, srid=4326),
+            )
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(self.URL, {"latitude": -15.7801, "longitude": -47.9292})
+
+        results = response.data["results"]
+        names = [result["name"] for result in results]
+
+        assert names == ["Near", "Far"]
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    def test_city_filter_is_case_and_accent_insensitive(self, api_client, db):
+        """
+        Testing that the city filter matches case and accent variations
+        (e.g. 'taguaTINGA' finds markets in 'Taguatinga').
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        for name, city in [
+            ("Atacadão Taguatinga", "Taguatinga"),
+            ("Comper Gama", "Gama"),
+        ]:
+            parent = baker.make(ParentSupermarket, name=name)
+            branch = baker.make(
+                BranchSupermarket,
+                parent_supermarket=parent,
+                state="DF",
+                city=city,
+                address=f"{name}, QI 01",
+                coordinates=Point(-47.9292, -15.7801, srid=4326),
+            )
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "city": "taguaTINGA",
+            },
+        )
+
+        results = response.data["results"]
+        names = [result["name"] for result in results]
+
+        assert names == ["Atacadão Taguatinga"]
+
     @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
     @pytest.mark.parametrize(
         "query, expected_name",
@@ -227,6 +301,99 @@ class TestBranchSupermarketListView:
 
         assert results
         assert results[0]["name"] == "Comper"
+
+
+@pytest.mark.django_db
+class TestBranchCityListView:
+    """
+    Class destined to the elaboration of tests of 'BranchCityListView' view.
+    """
+
+    URL = reverse("cities_list")
+
+    def test_returns_empty_when_no_active_offers(self, api_client, branch_with_expired_offers):
+        """
+        Testing that no cities are returned when there are no active offers.
+        """
+
+        response = api_client.get(self.URL)
+
+        assert response.status_code == 200
+        assert response.data == []
+
+    def test_returns_distinct_active_cities_ordered(self, api_client, db):
+        """
+        Testing that only unique cities of markets with active offers are
+        returned, ordered alphabetically and without duplicates.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+
+        for name, city in [
+            ("Mercado A", "Taguatinga"),
+            ("Mercado B", "Brasília"),
+            ("Mercado C", "Gama"),
+            ("Mercado D", "Taguatinga"),
+        ]:
+            parent = baker.make(ParentSupermarket, name=name)
+            branch = baker.make(
+                BranchSupermarket,
+                parent_supermarket=parent,
+                state="DF",
+                city=city,
+                address="QI 01",
+            )
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(self.URL)
+
+        assert response.status_code == 200
+        assert response.data == ["Brasília", "Gama", "Taguatinga"]
+
+    def test_excludes_cities_with_only_expired_offers(self, api_client, db):
+        """
+        Testing that cities of markets with only expired offers are not included.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        past_date = timezone.now().date() - timedelta(days=1)
+
+        active_parent = baker.make(ParentSupermarket, name="Ativo")
+        active_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=active_parent,
+            state="DF",
+            city="Gama",
+            address="QI 01",
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=active_branch,
+            offer__expiration_date=future_date,
+        )
+
+        expired_parent = baker.make(ParentSupermarket, name="Expirado")
+        expired_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=expired_parent,
+            state="DF",
+            city="Taguatinga",
+            address="QI 02",
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=expired_branch,
+            offer__expiration_date=past_date,
+        )
+
+        response = api_client.get(self.URL)
+
+        assert response.status_code == 200
+        assert response.data == ["Gama"]
 
 
 @pytest.mark.django_db
