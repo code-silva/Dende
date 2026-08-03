@@ -36,17 +36,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
           location.coords.longitude,
         );
 
-        const paginatedData = data as unknown as { results: Market[] };
-
-        if (paginatedData && Array.isArray(paginatedData.results)) {
-          setMarkets(paginatedData.results);
-        } else {
-          console.warn(
-            "A estrutura da API mudou ou .results não é um array válido:",
-            data,
-          );
-          setMarkets([]);
-        }
+        setMarkets(data);
       } catch (error) {
         console.error("Erro ao buscar mercados:", error);
         setMarkets([]);
