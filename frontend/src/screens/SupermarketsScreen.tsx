@@ -8,15 +8,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchSupermarkets } from "../api/markets";
+import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketList } from "../components/MarketList";
 import { SearchBar } from "../components/SearchBar";
 import type { Market } from "../types/market";
 import { searchMarkets } from "../utils/fuzzySearch";
 
-const SEARCH_DEBOUNCE_MS = 500;
-
 const RECOMMENDATION_RADIUS_KM = 10;
 const SEARCH_RADIUS_KM = 30;
+
+const SEARCH_DEBOUNCE_MS = 500;
 
 interface SupermarketsScreenProps {
   location: Location.LocationObject | null;
@@ -32,6 +33,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   // biome-ignore lint/correctness/noUnusedVariables: setter will be used when region filter UI is implemented
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchTextRef = useRef(searchText);
   searchTextRef.current = searchText;
@@ -76,8 +78,10 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
         console.error("Erro ao buscar mercados:", error);
         setMarkets([]);
       } finally {
-        setIsLoading(false);
-        setIsSearching(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setIsSearching(false);
+        }
       }
     },
     [location],
@@ -92,20 +96,41 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     const currentSearch = searchTextRef.current;
 
     if (!currentSearch.trim()) {
+      setIsSearching(false);
       fetchSupermarketsData(undefined, selectedRegionRef.current, true);
       return;
     }
 
     setIsSearching(true);
-    const timer = setTimeout(() => {
-      fetchSupermarketsData(currentSearch, selectedRegionRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      fetchSupermarketsData(currentSearch, selectedRegionRef.current, true);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => {
-      clearTimeout(timer);
-      setIsSearching(false);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
     };
   }, [searchText]);
+
+  const handleSearchSubmit = useCallback(
+    (text: string) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        fetchSupermarketsData(undefined, selectedRegionRef.current, true);
+        return;
+      }
+      setSearchText(trimmed);
+      fetchSupermarketsData(trimmed, selectedRegionRef.current);
+    },
+    [fetchSupermarketsData],
+  );
 
   const filteredMarkets = useMemo(() => {
     let result = markets;
@@ -162,24 +187,29 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
         <SearchBar
           placeholder="Buscar mercados..."
           onChangeText={setSearchText}
+          onSearch={handleSearchSubmit}
           disableApiSearch
         />
       </View>
 
-      <MarketList
-        markets={filteredMarkets}
-        handleMarketPress={handleMarketPress}
-        listHeaderComponent={listHeader}
-        listEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.emptyText}>
-              {isSearching
-                ? "Buscando mercados..."
-                : "Nenhum mercado com ofertas encontrado nesta região."}
-            </Text>
-          </View>
-        }
-      />
+      {isSearching ? (
+        <View style={styles.centered}>
+          <LoadingFooter isLoading message="Buscando mercados..." />
+        </View>
+      ) : (
+        <MarketList
+          markets={filteredMarkets}
+          handleMarketPress={handleMarketPress}
+          listHeaderComponent={listHeader}
+          listEmptyComponent={
+            <View style={styles.centered}>
+              <Text style={styles.emptyText}>
+                Nenhum mercado com ofertas encontrado nesta região.
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }

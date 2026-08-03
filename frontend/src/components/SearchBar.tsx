@@ -24,6 +24,7 @@ interface SearchBarProps {
   initialValue?: string;
   placeholder?: string;
   onChangeText?: (text: string) => void;
+  onSearch?: (text: string) => void;
   disableApiSearch?: boolean;
 }
 
@@ -31,6 +32,7 @@ export const SearchBar = ({
   initialValue = "",
   placeholder = "Busque por produtos...",
   onChangeText,
+  onSearch,
   disableApiSearch = false,
 }: SearchBarProps) => {
   const [term, setTerm] = useState(initialValue);
@@ -42,6 +44,7 @@ export const SearchBar = ({
   const handleSearchAction = (searchTerm: string) => {
     Keyboard.dismiss();
     setIsFocused(false);
+    onSearch?.(searchTerm);
     if (!disableApiSearch) fetchHybridSearch(searchTerm);
   };
 
