@@ -12,11 +12,9 @@ import { fetchSupermarkets } from "../api/markets";
 import { CityFilter } from "../components/CityFilter";
 import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketList } from "../components/MarketList";
-import { SearchBar } from "../components/SearchBar";
+import { SearchBar, type SearchBarHandle } from "../components/SearchBar";
 import type { Market } from "../types/market";
 import { normalizeString, searchMarkets } from "../utils/fuzzySearch";
-
-const SEARCH_DEBOUNCE_MS = 500;
 
 interface SupermarketsScreenProps {
   location: Location.LocationObject | null;
@@ -32,7 +30,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
   const [searchText, setSearchText] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchBarRef = useRef<SearchBarHandle>(null);
 
   const searchTextRef = useRef(searchText);
   searchTextRef.current = searchText;
@@ -126,46 +124,47 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     };
   }, [location, cities]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchSupermarketsData is stable (useCallback); selectedCity read from ref to avoid triggering on city change (handled by Effect 1)
-  useEffect(() => {
-    const currentSearch = searchTextRef.current;
-
-    if (!currentSearch.trim()) {
-      setIsSearching(false);
-      fetchSupermarketsData(undefined, selectedCityRef.current, true);
-      return;
-    }
-
-    setIsSearching(true);
-    debounceTimerRef.current = setTimeout(() => {
-      fetchSupermarketsData(currentSearch, selectedCityRef.current, true);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
+  const handleDebouncedChange = useCallback(
+    (text: string) => {
+      setSearchText(text);
+      if (text.trim()) {
+        setIsSearching(true);
+        fetchSupermarketsData(text, selectedCityRef.current, true);
+      } else {
+        setIsSearching(false);
+        fetchSupermarketsData(undefined, selectedCityRef.current, true);
       }
-    };
-  }, [searchText]);
+    },
+    [fetchSupermarketsData],
+  );
 
   const handleSearchSubmit = useCallback(
     (text: string) => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
-
       const trimmed = text.trim();
       if (!trimmed) {
         fetchSupermarketsData(undefined, selectedCityRef.current, true);
         return;
       }
       setSearchText(trimmed);
+      setIsSearching(true);
       fetchSupermarketsData(trimmed, selectedCityRef.current);
     },
     [fetchSupermarketsData],
   );
+
+  const handleClearFilters = useCallback(() => {
+    searchBarRef.current?.clear();
+
+    const hadActiveFilters =
+      searchTextRef.current.trim() !== "" || selectedCityRef.current != null;
+
+    setSearchText("");
+    setSelectedCity(null);
+
+    if (hadActiveFilters) {
+      fetchSupermarketsData(undefined, undefined, true);
+    }
+  }, [fetchSupermarketsData]);
 
   const filteredMarkets = useMemo(
     () => searchMarkets(markets, searchText),
@@ -210,15 +209,17 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.searchWrapper}>
         <SearchBar
+          ref={searchBarRef}
           placeholder="Buscar mercados..."
-          onChangeText={setSearchText}
           onSearch={handleSearchSubmit}
+          onDebouncedChange={handleDebouncedChange}
           disableApiSearch
         />
         <CityFilter
           cities={cities}
           selectedCity={selectedCity}
           onSelectCity={setSelectedCity}
+          onClearFilters={handleClearFilters}
         />
       </View>
 

@@ -15,12 +15,14 @@ interface CityFilterProps {
   cities: string[];
   selectedCity: string | null;
   onSelectCity: (city: string | null) => void;
+  onClearFilters?: () => void;
 }
 
 export const CityFilter = ({
   cities,
   selectedCity,
   onSelectCity,
+  onClearFilters,
 }: CityFilterProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -64,7 +66,14 @@ export const CityFilter = ({
 
             <TouchableOpacity
               style={styles.option}
-              onPress={() => handleSelect(null)}
+              onPress={() => {
+                if (onClearFilters) {
+                  onClearFilters();
+                } else {
+                  onSelectCity(null);
+                }
+                setIsOpen(false);
+              }}
               activeOpacity={0.7}
             >
               <Feather
@@ -72,7 +81,7 @@ export const CityFilter = ({
                 size={18}
                 color={selectedCity == null ? colors.primary : "#C0C4CC"}
               />
-              <Text style={styles.optionText}>Limpar Filtro</Text>
+              <Text style={styles.optionText}>Limpar Filtros</Text>
             </TouchableOpacity>
 
             <ScrollView style={styles.optionsList} bounces={false}>
