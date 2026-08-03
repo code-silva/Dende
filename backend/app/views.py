@@ -103,13 +103,14 @@ class BranchSupermarketListView(generics.ListAPIView):
 
     Query params:
       - latitude, longitude (required for distance calculation)
-      - address (optional search term, triggers expanded radius)
+      - address (optional search term, triggers expanded radius and fuzzy matching)
       - city (optional exact city filter)
       - radiusInKm (optional override, e.g. "30")
     """
 
     serializer_class = BranchSupermarketSerializer
     pagination_class = BranchSupermarketPagination
+    SIMILARITY_THRESHOLD = 0.25
 
     def get_queryset(self):
         user_latitude = self.request.query_params.get("latitude")
@@ -129,20 +130,38 @@ class BranchSupermarketListView(generics.ListAPIView):
         if city_filter:
             queryset = queryset.filter(city__iexact=city_filter)
 
-        if address_search:
-            queryset = queryset.filter(
-                Q(address__icontains=address_search)
-                | Q(parent_supermarket__name__icontains=address_search)
+        # Fuzzy matching on the market name/address (pg_trgm). Small typos
+        # ("conper" -> "Comper") and accent variations ("pao" -> "Pão") are
+        # tolerated, unlike the legacy strict "icontains" substring filter.
+        normalized_address = normalize_search_query(address_search)
+        if normalized_address:
+            queryset = queryset.annotate(
+                similarity_name=TrigramSimilarity(
+                    Unaccent("parent_supermarket__name"), normalized_address
+                ),
+                similarity_address=TrigramSimilarity(
+                    Unaccent("address"), normalized_address
+                ),
+                relevance=Greatest(
+                    F("similarity_name"), F("similarity_address")
+                ),
+            ).filter(
+                Q(similarity_name__gt=self.SIMILARITY_THRESHOLD)
+                | Q(similarity_address__gt=self.SIMILARITY_THRESHOLD)
+                | Q(parent_supermarket__name__unaccent__icontains=normalized_address)
+                | Q(address__unaccent__icontains=normalized_address)
             )
 
         try:
             user_location = Point(float(user_longitude), float(user_latitude), srid=4326)
         except (ValueError, TypeError):
+            if normalized_address:
+                return queryset.order_by("-relevance")
             return queryset.order_by("parent_supermarket__name")
 
         if radius_override:
             radius_meters = float(radius_override) * 1000
-        elif address_search:
+        elif normalized_address:
             radius_meters = 30000
         else:
             radius_meters = 10000
@@ -150,10 +169,12 @@ class BranchSupermarketListView(generics.ListAPIView):
         results = (
             queryset.filter(coordinates__dwithin=(user_location, radius_meters))
             .annotate(distance=Distance("coordinates", user_location))
-            .order_by("distance")
         )
 
-        return results
+        if normalized_address:
+            return results.order_by("-relevance", "distance")
+
+        return results.order_by("distance")
 
 
 class BranchProductOfferListView(generics.ListAPIView):

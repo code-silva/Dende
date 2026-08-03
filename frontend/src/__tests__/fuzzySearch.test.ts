@@ -17,6 +17,8 @@ const markets: Market[] = [
   makeMarket(3, "Vivendas"),
   makeMarket(4, "São José"),
   makeMarket(5, "Extra"),
+  makeMarket(6, "Primavera"),
+  makeMarket(7, "Pão"),
 ];
 
 describe("normalizeString", () => {
@@ -34,6 +36,26 @@ describe("searchMarkets", () => {
   it("finds Comper when user types 'conper'", () => {
     const result = searchMarkets(markets, "conper");
     expect(result.map((m) => m.name)).toContain("Comper");
+  });
+
+  it("finds Comper when user inserts an extra character ('commper')", () => {
+    const result = searchMarkets(markets, "commper");
+    expect(result.map((m) => m.name)).toContain("Comper");
+  });
+
+  it("finds Primavera when user transposes letters ('primavrea')", () => {
+    const result = searchMarkets(markets, "primavrea");
+    expect(result.map((m) => m.name)).toContain("Primavera");
+  });
+
+  it("finds Primavera when user omits a character ('primvera')", () => {
+    const result = searchMarkets(markets, "primvera");
+    expect(result.map((m) => m.name)).toContain("Primavera");
+  });
+
+  it("finds Pão when user types without accent ('pao')", () => {
+    const result = searchMarkets(markets, "pao");
+    expect(result.map((m) => m.name)).toContain("Pão");
   });
 
   it("finds Ponto Alto regardless of case", () => {

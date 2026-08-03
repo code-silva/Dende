@@ -1,5 +1,12 @@
+from datetime import timedelta
+
 import pytest
+from django.contrib.gis.geos import Point
 from django.urls import reverse
+from django.utils import timezone
+from model_bakery import baker
+
+from app.models import BranchProductOffer, BranchSupermarket, ParentSupermarket
 
 
 @pytest.mark.django_db
@@ -111,6 +118,115 @@ class TestBranchSupermarketListView:
         names = [result["name"] for result in results]
 
         assert branch_with_mixed_offers.parent_supermarket.name in names
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    @pytest.mark.parametrize(
+        "query, expected_name",
+        [
+            ("conper", "Comper"),       # letter substitution
+            ("commper", "Comper"),      # extra character insertion
+            ("primavrea", "Primavera"),  # adjacent transposition
+            ("primvera", "Primavera"),   # character omission
+            ("pao", "Pão"),             # missing accent
+        ],
+    )
+    def test_address_search_tolerates_typos(
+        self, api_client, db, query, expected_name
+    ):
+        """
+        Testing that the fuzzy search (pg_trgm) tolerates small typos and
+        accent variations when searching markets by name/address.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        for name in ["Comper", "Primavera", "Ponto Alto", "Extra"]:
+            parent = baker.make(ParentSupermarket, name=name)
+            branch = baker.make(
+                BranchSupermarket,
+                parent_supermarket=parent,
+                state="DF",
+                city="Gama",
+                address=f"{name}, QI 01",
+                coordinates=Point(-47.9292, -15.7801, srid=4326),
+            )
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(
+            self.URL,
+            {"latitude": -15.7801, "longitude": -47.9292, "address": query},
+        )
+
+        names = [result["name"] for result in response.data["results"]]
+
+        assert expected_name in names
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    def test_address_search_rejects_unrelated_terms(self, api_client, db):
+        """
+        Testing that completely unrelated strings (e.g. 'xyzabc') do not
+        produce false positives in the fuzzy market search.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Comper, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=branch,
+            offer__expiration_date=future_date,
+        )
+
+        response = api_client.get(
+            self.URL,
+            {"latitude": -15.7801, "longitude": -47.9292, "address": "xyzabc"},
+        )
+
+        assert not response.data["results"]
+
+    @pytest.mark.skip(reason="PostgreeSQL is needed to run this test.")
+    def test_address_search_orders_by_relevance(self, api_client, db):
+        """
+        Testing that fuzzy results are ordered by similarity relevance,
+        with the most similar market appearing first.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        for name in ["Comper", "Compre Bem", "Extra"]:
+            parent = baker.make(ParentSupermarket, name=name)
+            branch = baker.make(
+                BranchSupermarket,
+                parent_supermarket=parent,
+                state="DF",
+                city="Gama",
+                address=f"{name}, QI 01",
+                coordinates=Point(-47.9292, -15.7801, srid=4326),
+            )
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(
+            self.URL,
+            {"latitude": -15.7801, "longitude": -47.9292, "address": "comper"},
+        )
+
+        results = response.data["results"]
+
+        assert results
+        assert results[0]["name"] == "Comper"
 
 
 @pytest.mark.django_db
