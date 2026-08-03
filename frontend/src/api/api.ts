@@ -23,7 +23,7 @@ export function fetchNearbyMarkets(
   signal?: AbortSignal,
 ) {
   return fetchWithTimeout(
-    fetchMarkets(latitude, longitude, undefined, undefined, undefined, signal),
+    fetchMarkets(latitude, longitude, undefined, undefined, 10, signal),
     PRE_FETCH_TIMEOUT_MS,
   );
 }
