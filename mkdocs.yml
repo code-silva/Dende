@@ -1,28 +1,20 @@
-site_name: Projeto Mercado - Anonna
+site_name: Dendê - Documentação
+site_url: https://code-silva.github.io/Dende/
 
 theme:
     name: material
     logo: img/logo_projeto_mercado.png
     favicon: img/logo_projeto_mercado.png
+    features:
+        - toc.autohide
+        - navigation.instant
+        - navigation.tracking
+        - search.suggest
+        - search.highlight
 
 markdown_extensions:
-    - admonition  # Ativa os blocos de aviso (admonitions)
-    - pymdownx.details # Necessário para que os admonitions possam ser recolhíveis (collapse)
-
-features:
-      # Use esta linha se você quiser ocultar a barra lateral automaticamente
-      # quando não houver espaço suficiente (útil em telas menores)
-      - toc.autohide
-
-      # Para ter controle total e garantir que o corpo principal seja mais largo,
-      # você pode remover todas as menções a 'toc' e apenas listar outros recursos
-      # que você deseja manter (como navegação por abas, se ativado).
-
-      # Exemplo SEGURO para manter a navegação principal (esquerda) e maximizar o conteúdo:
-      - navigation.instant
-      - navigation.tracking
-      - search.suggest
-      - search.highlight
+    - admonition
+    - pymdownx.details
 
     # ---------------------------------------------
 

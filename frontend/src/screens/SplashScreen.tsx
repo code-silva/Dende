@@ -4,12 +4,12 @@ import {
   Animated,
   Dimensions,
   Easing,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import LogoDende from "../assets/splash/logo_dende.svg";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -132,10 +132,10 @@ export default function SplashScreen({
               },
             ]}
           >
-            <Image
-              source={require("../assets/splash/logo_dende.png")}
+            <LogoDende
               style={styles.logo}
-              resizeMode="contain"
+              width={styles.logo.width}
+              height={styles.logo.height}
             />
             <Text style={styles.title}>Dendê</Text>
           </Animated.View>
@@ -153,10 +153,10 @@ export default function SplashScreen({
             ]}
             pointerEvents="none"
           >
-            <Image
-              source={require("../assets/splash/logo_dende.png")}
+            <LogoDende
               style={styles.logo}
-              resizeMode="contain"
+              width={styles.logo.width}
+              height={styles.logo.height}
             />
             <Text style={styles.title}>Dendê</Text>
           </Animated.View>
