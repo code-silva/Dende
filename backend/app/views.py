@@ -140,12 +140,8 @@ class BranchSupermarketListView(generics.ListAPIView):
                 similarity_name=TrigramSimilarity(
                     Unaccent("parent_supermarket__name"), normalized_address
                 ),
-                similarity_address=TrigramSimilarity(
-                    Unaccent("address"), normalized_address
-                ),
-                relevance=Greatest(
-                    F("similarity_name"), F("similarity_address")
-                ),
+                similarity_address=TrigramSimilarity(Unaccent("address"), normalized_address),
+                relevance=Greatest(F("similarity_name"), F("similarity_address")),
             ).filter(
                 Q(similarity_name__gt=self.SIMILARITY_THRESHOLD)
                 | Q(similarity_address__gt=self.SIMILARITY_THRESHOLD)
@@ -174,9 +170,7 @@ class BranchSupermarketListView(generics.ListAPIView):
         # Optional configurable radius. When omitted, no distance limit is applied.
         if radius_override:
             radius_meters = float(radius_override) * 1000
-            results = results.filter(
-                coordinates__dwithin=(user_location, radius_meters)
-            )
+            results = results.filter(coordinates__dwithin=(user_location, radius_meters))
 
         if normalized_address:
             return results.order_by("-relevance", "distance")

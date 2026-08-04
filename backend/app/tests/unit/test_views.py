@@ -197,16 +197,14 @@ class TestBranchSupermarketListView:
     @pytest.mark.parametrize(
         "query, expected_name",
         [
-            ("conper", "Comper"),       # letter substitution
-            ("commper", "Comper"),      # extra character insertion
+            ("conper", "Comper"),  # letter substitution
+            ("commper", "Comper"),  # extra character insertion
             ("primavrea", "Primavera"),  # adjacent transposition
-            ("primvera", "Primavera"),   # character omission
-            ("pao", "Pão"),             # missing accent
+            ("primvera", "Primavera"),  # character omission
+            ("pao", "Pão"),  # missing accent
         ],
     )
-    def test_address_search_tolerates_typos(
-        self, api_client, db, query, expected_name
-    ):
+    def test_address_search_tolerates_typos(self, api_client, db, query, expected_name):
         """
         Testing that the fuzzy search (pg_trgm) tolerates small typos and
         accent variations when searching markets by name/address.
