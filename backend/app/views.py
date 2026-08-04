@@ -154,8 +154,17 @@ class BranchSupermarketListView(generics.ListAPIView):
             )
 
         try:
-            user_location = Point(float(user_longitude), float(user_latitude), srid=4326)
-        except (ValueError, TypeError):
+            user_latitude = float(user_latitude)
+            user_longitude = float(user_longitude)
+        except (TypeError, ValueError):
+            user_location = None
+        else:
+            if -90 <= user_latitude <= 90 and -180 <= user_longitude <= 180:
+                user_location = Point(user_longitude, user_latitude, srid=4326)
+            else:
+                user_location = None
+
+        if user_location is None:
             if normalized_address:
                 return queryset.order_by("-relevance")
             return queryset.order_by("parent_supermarket__name")
