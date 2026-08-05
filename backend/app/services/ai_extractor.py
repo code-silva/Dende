@@ -4,10 +4,12 @@ import os
 from pathlib import Path
 
 from django.conf import settings
+from django.db import transaction
 from google import genai
 from google.genai import types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from ..models import BranchProductOffer, Category, Offer, ParentSupermarket, Product
 from ..utils import validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
@@ -58,10 +60,9 @@ como o padrão. O preço está especificado na coluna "price".
 - Mercado: Identifique o nome do mercado pelo logotipo ou texto de destaque. Está especificado
 pela coluna "supermarket".
 
-- Canto superior esquerdo e canto inferior direito: Para cada produto, especifique as
-coordenadas em pixels (x, y) do panfleto onde está localizado a imagem do produto, para recorte
-e armazenamento posterior da imagem no banco de dados. Estão especificados pela coluna "top_left"
-e "bottom_right".
+- Categoria: O produto DEVE ser classificado em uma destas exatas categorias:
+Carnes, Grãos, Óleo, Café/Açúcar, Laticínios, Hortifruti, Ovos, Limpeza, Higiene, Massas,
+Molhos, Doces, Enlatados, Bebidas. Retorne o valor na coluna "category".
 
 Formato de Saída (JSON): Retorne APENAS um objeto JSON válido com a seguinte estrutura, sem markdown
 em volta, com todos os itens do mercado:
@@ -72,13 +73,12 @@ em volta, com todos os itens do mercado:
   "items": [
     {
       "name": "String (Ex: Arroz Branco)",
+      "category": "String (Ex: Grãos)",
       "type": "String (Ex: Varejo)",
-      "brand": "String ou null (Ex: Camil)",
-      "unit_of_measure": "String (kg, g, l, ml, un)",
-      "measure": Float (Ex: 5.0),
-      "price": Float (Ex: 21.90),
-      "top_left": [x, y],
-      "bottom_right": [x, y],
+      "brand": "String (Ex: Camil, ou \"\" se não tiver)",
+      "measurement_unit": "String (kg, g, l, ml, un)",
+      "measurement": Float (Ex: 5.0),
+      "price": Float (Ex: 21.90)
     }
   ]
 }
@@ -191,3 +191,51 @@ def save_extracted_data(data: dict, output_filepath: Path):
         json.dump(data, json_file, indent=2, ensure_ascii=False)
 
     os.chmod(output_filepath, 0o666)
+
+
+def save_extracted_data_to_db(data: dict, url: str):
+    """
+    Saves the consolidated JSON data into the database using atomic transactions.
+    It maps the extracted supermarket to a ParentSupermarket and links all
+    its existing branches to the new Offer.
+    """
+    try:
+        with transaction.atomic():
+            offer, _ = Offer.objects.update_or_create(
+                url=url, defaults={"expiration_date": data["expiration_date"]}
+            )
+
+            parent_supermarket, _ = ParentSupermarket.objects.get_or_create(
+                name=data["supermarket"]
+            )
+            branches = list(parent_supermarket.branches.all())
+
+            for item in data["items"]:
+                try:
+                    category = Category.objects.get(name__iexact=item["category"])
+                except Category.DoesNotExist:
+                    logger.warning(
+                        f"Category '{item['category']}' not found for product '{item['name']}'.",
+                        "Skipping.",
+                    )
+                    continue
+
+                product, _ = Product.objects.get_or_create(
+                    name=item["name"],
+                    brand=item["brand"],
+                    measurement=item["measurement"],
+                    measurement_unit=item["measurement_unit"].upper(),
+                    category=category,
+                )
+
+                for branch in branches:
+                    BranchProductOffer.objects.update_or_create(
+                        product=product,
+                        branch_supermarket=branch,
+                        offer=offer,
+                        defaults={"price": item["price"]},
+                    )
+
+    except Exception as e:
+        logger.error(f"Failed to save data to database for {url}: {e}")
+        raise

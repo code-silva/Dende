@@ -1,6 +1,6 @@
 import unicodedata
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,21 +9,19 @@ class FlyerItemSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     name: str
-    type: str | None = "Varejo"
-    brand: str | None = None
-    unit_of_measure: str | None = None
-    measure: float | None = None
+    category: str
+    brand: str
+    measurement_unit: Literal["KG", "G", "L", "ML", "UN", "kg", "g", "l", "ml", "un"]
+    measurement: float
     price: float
-    top_left: list[int] | None = None
-    bottom_right: list[int] | None = None
 
 
 class FlyerExtractionSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    supermarket: str | None = None
-    expiration_date: date | None = None
-    items: list[FlyerItemSchema] = Field(default_factory=list)
+    supermarket: str
+    expiration_date: date
+    items: list[FlyerItemSchema] = Field(min_length=1)
 
 
 def validate_extracted_flyer_json(data: Any) -> dict:

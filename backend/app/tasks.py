@@ -6,6 +6,7 @@ from celery import shared_task
 from django.conf import settings
 from google import genai
 from google.genai import errors
+from pydantic import ValidationError
 
 from .models import (
     Offer,
@@ -15,6 +16,7 @@ from .services.ai_extractor import (
     get_flyer_images,
     process_flyers_batch,
     save_extracted_data,
+    save_extracted_data_to_db,
 )
 from .services.scraper import download_supermarket_flyers, get_active_supermarkets
 
@@ -25,6 +27,10 @@ def _handle_extraction_error(task_instance, error: Exception, market_folder: str
     """
     Handles exceptions during AI extraction and triggers Celery retries if needed.
     """
+    if isinstance(error, ValidationError):
+        logger.error(f"Pydantic validation error for {market_folder}: {error}")
+        raise task_instance.retry(exc=error, countdown=30) from error
+
     if isinstance(error, json.JSONDecodeError):
         logger.error(f"JSON decode error for {market_folder}: {error}")
         raise task_instance.retry(exc=error, countdown=30) from error
@@ -76,15 +82,14 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
     for batch_start in range(0, len(images), batch_size):
         batch_images = images[batch_start : batch_start + batch_size]
 
-        try:
-            logger.info(
-                f"Processing batch {batch_start // batch_size + 1}"
-                f" ({len(batch_images)} flyers) from {market_folder}"
-            )
+        logger.info(
+            f"Processing batch {batch_start // batch_size + 1}"
+            f" ({len(batch_images)} flyers) from {market_folder}"
+        )
 
+        try:
             validated_data = process_flyers_batch(client, batch_images)
             extracted_batches.append(validated_data)
-
         except Exception as e:
             _handle_extraction_error(self, e, market_folder)
 
@@ -93,6 +98,10 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
     # Saving JSON in the same folder as flyers
     output_filepath = target / "extracted_data.json"
     save_extracted_data(consolidated_data, output_filepath)
+
+    # Save to Database
+    logger.info(f"Saving extracted data from {market_folder} to database.")
+    save_extracted_data_to_db(consolidated_data, url)
 
     return {"status": "success", "items_extracted": len(consolidated_data["items"])}
 
