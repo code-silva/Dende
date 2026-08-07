@@ -3,8 +3,6 @@ import logging
 from pathlib import Path
 
 from celery import shared_task
-from django.conf import settings
-from google import genai
 from google.genai import errors
 from pydantic import ValidationError
 
@@ -74,8 +72,6 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
         logger.info(f"No flyer images found in path: {market_folder}")
         return {"status": "skipped", "reason": "No images found"}
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
     batch_size = 15
     extracted_batches = []
 
@@ -88,7 +84,7 @@ def extract_supermarket_flyers_data(self, market_folder: str, url: str = None):
         )
 
         try:
-            validated_data = process_flyers_batch(client, batch_images)
+            validated_data = process_flyers_batch(batch_images)
             extracted_batches.append(validated_data)
         except Exception as e:
             _handle_extraction_error(self, e, market_folder)

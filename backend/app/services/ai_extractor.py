@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from google import genai
 from google.genai import types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -201,6 +201,9 @@ def save_extracted_data_to_db(data: dict, url: str):
     """
     try:
         with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(8472935)")
+
             offer, _ = Offer.objects.update_or_create(
                 url=url, defaults={"expiration_date": data["expiration_date"]}
             )

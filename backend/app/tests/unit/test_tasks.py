@@ -96,13 +96,12 @@ class TestExtractSupermarketFlyersDataBusinessRules:
         result = extract_supermarket_flyers_data("/fake", "http://test.com")
         assert result["status"] == "skipped"
 
-    @patch("app.tasks.genai.Client")
     @patch("app.tasks.get_flyer_images")
     @patch("app.tasks.process_flyers_batch")
     @patch("app.tasks.save_extracted_data")
     @patch("app.tasks.save_extracted_data_to_db")
     def test_orchestrates_extraction_flow_and_saves_to_db(
-        self, mock_save_db, mock_save_json, mock_process, mock_get_images, mock_client
+        self, mock_save_db, mock_save_json, mock_process, mock_get_images
     ):
         """Rule: Successfully process, consolidate, save JSON locally and persist to Database."""
         # Mock 2 images, enough for 1 batch

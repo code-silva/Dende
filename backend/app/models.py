@@ -23,9 +23,9 @@ class Product(models.Model):
         ML = "ML", "ML"
         UN = "UN", "UN"
 
-    name = models.CharField(max_length=50, blank=False)
+    name = models.CharField(max_length=100, blank=False)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
-    brand = models.CharField(max_length=50, blank=False)
+    brand = models.CharField(max_length=100, blank=False)
     measurement = models.DecimalField(max_digits=10, decimal_places=2)
     image = models.ImageField(upload_to="products/")
 
