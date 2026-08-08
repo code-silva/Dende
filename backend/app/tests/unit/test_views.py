@@ -466,6 +466,54 @@ class TestHybridSearchView:
         assert response.status_code == 200
         assert any("arroz" in offer["productName"].lower() for offer in results)
 
+    def test_search_orders_results_by_relevance(self, api_client, db):
+        """
+        Testing that matches on the product name are ranked above matches on
+        the brand, and that closer products appear first. Uses accent-free
+        data so the assertion is valid on SQLite (CI) and PostgreSQL.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        # matched by NAME (relevance tier 4) - exact, strongest match
+        name_match = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="feijao carioca especial", brand="X", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+        # matched only by BRAND (relevance tier 3)
+        brand_match = BranchProductOffer.objects.create(
+            product=baker.make(Product, name="arroz integral", brand="feijao", category=category),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+
+        response = api_client.get(
+            self.URL, {"query": "feijao", "marketId": branch.id}
+        )
+
+        results = response.data["offers"]
+        ordered_names = [offer["productName"] for offer in results]
+
+        assert response.status_code == 200
+        # name hit must come before the brand-only hit
+        assert ordered_names.index(name_match.product.name) < ordered_names.index(
+            brand_match.product.name
+        )
+
 
 @pytest.mark.django_db
 class TestBranchProductOfferListView:

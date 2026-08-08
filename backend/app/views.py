@@ -24,34 +24,77 @@ class HybridSearchView(APIView):
     View responsible for performing a unified search across both product offers and
     supermarkets. It uses trigram similarity and text filtering to find relevant
     results based on names, brands, or categories.
+
+    Query params:
+      - query: the (already normalized) search term typed by the user.
     """
+
+    SIMILARITY_THRESHOLD = 0.25
+
+    @staticmethod
+    def _relevance_case(lookup: str, term: str) -> Case:
+        """
+        Builds a `Case`/`When` expression that scores how directly the search
+        term matched each product: a name hit is more relevant than a brand hit,
+        which in turn beats a category hit; rows matched only by fuzzy trigram
+        similarity score the lowest. The same expression works on PostgreSQL
+        ('__unaccent__icontains') and SQLite ('__icontains'), keeping the ordering
+        contract identical across test CI and production.
+        """
+
+        return Case(
+            When(**{f"product__name{lookup}": term}, then=Value(4)),
+            When(**{f"product__brand{lookup}": term}, then=Value(3)),
+            When(**{f"product__category__name{lookup}": term}, then=Value(2)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
 
     def get(self, request):
         query = normalize_search_query(request.GET.get("query", "").strip())
-        SIMILARITY_THRESHOLD = 0.25
 
         if not query:
             return Response({"offers": []})
 
-        offers = (
-            BranchProductOffer.objects.annotate(
-                similarity_name=TrigramSimilarity("product__name", query),
-                similarity_brand=TrigramSimilarity("product__brand", query),
-            )
-            .filter(
+        offers = BranchProductOffer.objects.select_related(
+            "product",
+            "product__category",
+            "branch_supermarket__parent_supermarket",
+        )
+
+        if connection.vendor == "postgresql":
+            # PostgreSQL: accent-insensitive lookup plus trigram similarity on
+            # name and brand (the query is de-accented by normalize_search_query,
+            # so Unaccent is applied to the columns, consistent with
+            # BranchProductOfferListView). Relevance is derived from which field
+            # matched the term (name > brand > category > fuzzy), with the
+            # trigram score used as a tie-breaker so the closest matches rank first.
+            offers = offers.annotate(
+                similarity_name=TrigramSimilarity(Unaccent("product__name"), query),
+                similarity_brand=TrigramSimilarity(Unaccent("product__brand"), query),
+            ).filter(
                 Q(product__name__unaccent__icontains=query)
                 | Q(product__brand__unaccent__icontains=query)
                 | Q(product__category__name__unaccent__icontains=query)
-                | Q(similarity_name__gt=SIMILARITY_THRESHOLD)
-                | Q(similarity_brand__gt=SIMILARITY_THRESHOLD)
+                | Q(similarity_name__gt=self.SIMILARITY_THRESHOLD)
+                | Q(similarity_brand__gt=self.SIMILARITY_THRESHOLD)
             )
-            .select_related(
-                "product",
-                "product__category",
-                "branch_supermarket__parent_supermarket",
+            ordering = ["-relevance", "-similarity_name", "-similarity_brand"]
+            relevance_lookup = "__unaccent__icontains"
+        else:
+            # SQLite (tests/CI): fallback without unaccent/pg_trgm. Relevance is
+            # derived from which field matched first (name > brand > category).
+            offers = offers.filter(
+                Q(product__name__icontains=query)
+                | Q(product__brand__icontains=query)
+                | Q(product__category__name__icontains=query)
             )
-            .order_by("-similarity_name")
-        )
+            ordering = ["-relevance"]
+            relevance_lookup = "__icontains"
+
+        offers = offers.annotate(
+            relevance=self._relevance_case(relevance_lookup, query)
+        ).order_by(*ordering)
 
         return Response({"offers": BranchProductOfferSerializer(offers, many=True).data})
 
