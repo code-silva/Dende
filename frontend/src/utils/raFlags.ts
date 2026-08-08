@@ -1,4 +1,5 @@
 import type { ImageSourcePropType } from "react-native";
+import { normalizeString } from "./string";
 
 interface RAConfig {
   flag: ImageSourcePropType;
@@ -31,18 +32,6 @@ const raFlagsMap: Record<string, RAConfig> = {
   // Future compound RAs follow the same pattern with ASCII keys:
   // aguas_claras: { ... }
 };
-
-/**
- * Helper function to remove accents and special characters,
- * ensuring searches for "águas claras" and "aguas claras" match identically.
- */
-function normalizeString(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
 
 export function findFlag(
   neighborhood?: string,

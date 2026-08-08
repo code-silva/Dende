@@ -1,4 +1,5 @@
 from django.contrib.gis.db import models as gis_models
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 
@@ -38,6 +39,18 @@ class Product(models.Model):
     class Meta:
         verbose_name = "Produto"
         verbose_name_plural = "Produtos"
+        indexes = [
+            GinIndex(
+                fields=["name"],
+                name="product_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["brand"],
+                name="product_brand_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} {self.brand} - {self.measurement}{self.measurement_unit}"

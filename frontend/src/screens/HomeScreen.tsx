@@ -70,6 +70,9 @@ export const HomeScreen = memo(function HomeScreen({
       const data = await fetchMarkets(
         location.coords.latitude,
         location.coords.longitude,
+        undefined,
+        undefined,
+        10,
       );
 
       setMarkets(data);

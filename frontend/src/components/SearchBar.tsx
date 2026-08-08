@@ -1,5 +1,11 @@
 import { Feather } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -20,176 +26,230 @@ const { width: screenWidth } = Dimensions.get("window");
 const isUltraNarrow = screenWidth < 330;
 const isSmall = screenWidth < 350;
 
+const SEARCH_DEBOUNCE_MS = 500;
+
+export interface SearchBarHandle {
+  clear: () => void;
+}
+
 interface SearchBarProps {
   initialValue?: string;
   placeholder?: string;
   onChangeText?: (text: string) => void;
+  onSearch?: (text: string) => void;
+  onDebouncedChange?: (text: string) => void;
   disableApiSearch?: boolean;
 }
 
-export const SearchBar = ({
-  initialValue = "",
-  placeholder = "Busque por produtos...",
-  onChangeText,
-  disableApiSearch = false,
-}: SearchBarProps) => {
-  const [term, setTerm] = useState(initialValue);
-  const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSearchPerformed, setIsSearchPerformed] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
+export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
+  function SearchBar(
+    {
+      initialValue = "",
+      placeholder = "Busque por produtos...",
+      onChangeText,
+      onSearch,
+      onDebouncedChange,
+      disableApiSearch = false,
+    },
+    ref,
+  ) {
+    const [term, setTerm] = useState(initialValue);
+    const [isLoading, setIsLoading] = useState(false);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [isSearchPerformed, setIsSearchPerformed] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
 
-  const handleSearchAction = (searchTerm: string) => {
-    Keyboard.dismiss();
-    setIsFocused(false);
-    if (!disableApiSearch) fetchHybridSearch(searchTerm);
-  };
+    const isFirstRunRef = useRef(true);
+    const suppressDebounceRef = useRef(false);
 
-  useEffect(() => {
-    setTerm(initialValue);
-  }, [initialValue]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        clear: () => {
+          suppressDebounceRef.current = true;
+          setTerm("");
+          setSuggestions([]);
+          setIsSearchPerformed(false);
+        },
+      }),
+      [],
+    );
 
-  useEffect(() => {
-    onChangeText?.(term);
-  }, [term, onChangeText]);
+    const handleSearchAction = (searchTerm: string) => {
+      Keyboard.dismiss();
+      setIsFocused(false);
+      onSearch?.(searchTerm);
+      if (!disableApiSearch) fetchHybridSearch(searchTerm);
+    };
 
-  useEffect(() => {
-    if (disableApiSearch) return;
+    useEffect(() => {
+      setTerm(initialValue);
+    }, [initialValue]);
 
-    if (term.length < 2) {
-      setIsLoading(false);
-      setSuggestions([]);
-      setIsSearchPerformed(false);
-      return;
-    }
+    useEffect(() => {
+      onChangeText?.(term);
+    }, [term, onChangeText]);
 
-    setIsLoading(true);
+    useEffect(() => {
+      if (!onDebouncedChange) return;
 
-    const searchDelay = setTimeout(async () => {
-      try {
-        const data = await fetchHybridSearch(term);
-
-        if (data.offers) {
-          const productNames = data.offers.map(
-            (item: Product) => item.productName,
-          );
-          const uniqueNames = Array.from(new Set(productNames));
-          setSuggestions(uniqueNames as string[]);
-        }
-        setIsSearchPerformed(true);
-      } catch (error) {
-        console.error("Error in hybrid search:", error);
-        setSuggestions([]);
-      } finally {
-        setIsLoading(false);
+      if (isFirstRunRef.current) {
+        isFirstRunRef.current = false;
+        return;
       }
-    }, 500);
 
-    return () => clearTimeout(searchDelay);
-  }, [term, disableApiSearch]);
+      if (suppressDebounceRef.current) {
+        suppressDebounceRef.current = false;
+        return;
+      }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={[
-            // @ts-expect-error
-            styles.input,
-            { fontSize: isUltraNarrow ? 13 : isSmall ? 14 : 16 },
-          ]}
-          placeholder={placeholder}
-          placeholderTextColor="#A0AAB2"
-          value={term}
-          onChangeText={setTerm}
-          autoCapitalize="none"
-          underlineColorAndroid="transparent"
-          returnKeyType="search"
-          onSubmitEditing={() => handleSearchAction(term)}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-        />
+      const delay = setTimeout(
+        () => onDebouncedChange(term),
+        SEARCH_DEBOUNCE_MS,
+      );
+      return () => clearTimeout(delay);
+    }, [term, onDebouncedChange]);
 
-        <View style={styles.iconContainer}>
-          <View style={styles.shapeLight} />
-          <View style={styles.shapeDark} />
+    useEffect(() => {
+      if (disableApiSearch) return;
 
-          {/* Lupe Icon*/}
-          <View style={styles.iconWrapper}>
-            {isLoading && !disableApiSearch ? (
-              <ActivityIndicator
-                size="small"
-                color="#FFFFFF"
-                style={isUltraNarrow ? { transform: [{ scale: 0.8 }] } : null}
-              />
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  handleSearchAction(term);
-                }}
-              >
-                <Feather
-                  name="search"
-                  size={isUltraNarrow ? 18 : isSmall ? 20 : 24}
+      if (term.length < 2) {
+        setIsLoading(false);
+        setSuggestions([]);
+        setIsSearchPerformed(false);
+        return;
+      }
+
+      setIsLoading(true);
+
+      const searchDelay = setTimeout(async () => {
+        try {
+          const data = await fetchHybridSearch(term);
+
+          if (data.offers) {
+            const productNames = data.offers.map(
+              (item: Product) => item.productName,
+            );
+            const uniqueNames = Array.from(new Set(productNames));
+            setSuggestions(uniqueNames as string[]);
+          }
+          setIsSearchPerformed(true);
+        } catch (error) {
+          console.error("Error in hybrid search:", error);
+          setSuggestions([]);
+        } finally {
+          setIsLoading(false);
+        }
+      }, 500);
+
+      return () => clearTimeout(searchDelay);
+    }, [term, disableApiSearch]);
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={[
+              // @ts-expect-error
+              styles.input,
+              { fontSize: isUltraNarrow ? 13 : isSmall ? 14 : 16 },
+            ]}
+            placeholder={placeholder}
+            placeholderTextColor="#A0AAB2"
+            value={term}
+            onChangeText={setTerm}
+            autoCapitalize="none"
+            underlineColorAndroid="transparent"
+            returnKeyType="search"
+            onSubmitEditing={() => handleSearchAction(term)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+          />
+
+          <View style={styles.iconContainer}>
+            <View style={styles.shapeLight} />
+            <View style={styles.shapeDark} />
+
+            {/* Lupe Icon*/}
+            <View style={styles.iconWrapper}>
+              {isLoading && !disableApiSearch ? (
+                <ActivityIndicator
+                  size="small"
                   color="#FFFFFF"
+                  style={isUltraNarrow ? { transform: [{ scale: 0.8 }] } : null}
                 />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {!disableApiSearch &&
-        isFocused &&
-        term.length >= 2 &&
-        suggestions.length > 0 && (
-          <View style={styles.suggestionsContainer}>
-            {suggestions.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={styles.suggestionItem}
-                onPress={() => {
-                  setTerm(item);
-                  setSuggestions([]);
-                }}
-              >
-                <Feather
-                  name="search"
-                  size={16}
-                  color="#A0AAB2"
-                  style={{ marginRight: 10 }}
-                />
-                <Text style={styles.suggestionText} numberOfLines={1}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-      {!disableApiSearch &&
-        isFocused &&
-        term.length >= 2 &&
-        isSearchPerformed &&
-        suggestions.length === 0 &&
-        !isLoading && (
-          <View style={styles.suggestionsContainer}>
-            <View style={styles.emptyItem}>
-              <Feather
-                name="help-circle"
-                size={20}
-                color={colors.textPrimary}
-                style={{ marginBottom: 8 }}
-              />
-              <Text style={styles.emptyTitle}>Nenhum resultado encontrado</Text>
-              <Text style={styles.emptySubtitle}>
-                Tente verificar a ortografia ou use termos mais simples.
-              </Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => {
+                    handleSearchAction(term);
+                  }}
+                >
+                  <Feather
+                    name="search"
+                    size={isUltraNarrow ? 18 : isSmall ? 20 : 24}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
-        )}
-    </View>
-  );
-};
+        </View>
+
+        {!disableApiSearch &&
+          isFocused &&
+          term.length >= 2 &&
+          suggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              {suggestions.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    setTerm(item);
+                    setSuggestions([]);
+                  }}
+                >
+                  <Feather
+                    name="search"
+                    size={16}
+                    color="#A0AAB2"
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={styles.suggestionText} numberOfLines={1}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+        {!disableApiSearch &&
+          isFocused &&
+          term.length >= 2 &&
+          isSearchPerformed &&
+          suggestions.length === 0 &&
+          !isLoading && (
+            <View style={styles.suggestionsContainer}>
+              <View style={styles.emptyItem}>
+                <Feather
+                  name="help-circle"
+                  size={20}
+                  color={colors.textPrimary}
+                  style={{ marginBottom: 8 }}
+                />
+                <Text style={styles.emptyTitle}>
+                  Nenhum resultado encontrado
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  Tente verificar a ortografia ou use termos mais simples.
+                </Text>
+              </View>
+            </View>
+          )}
+      </View>
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   container: {
