@@ -11,9 +11,11 @@ import {
   Dimensions,
   Keyboard,
   Platform,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -39,6 +41,7 @@ interface SearchBarProps {
   onSearch?: (text: string) => void;
   onDebouncedChange?: (text: string) => void;
   disableApiSearch?: boolean;
+  inputStyle?: StyleProp<TextStyle>;
 }
 
 export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
@@ -50,6 +53,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
       onSearch,
       onDebouncedChange,
       disableApiSearch = false,
+      inputStyle,
     },
     ref,
   ) {
@@ -153,6 +157,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
               // @ts-expect-error
               styles.input,
               { fontSize: isUltraNarrow ? 13 : isSmall ? 14 : 16 },
+              inputStyle,
             ]}
             placeholder={placeholder}
             placeholderTextColor="#A0AAB2"

@@ -72,7 +72,10 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
           paddingBottom: 10,
         }}
       >
-        <SearchBar />
+        <SearchBar
+          placeholder={`Buscar em ${actualName || "mercado"}...`}
+          inputStyle={{ fontSize: 14 }}
+        />
       </View>
 
       <ProductGrid
