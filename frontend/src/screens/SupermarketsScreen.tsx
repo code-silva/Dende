@@ -14,7 +14,7 @@ import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketList } from "../components/MarketList";
 import { SearchBar, type SearchBarHandle } from "../components/SearchBar";
 import type { Market } from "../types/market";
-import { normalizeString, searchMarkets } from "../utils/fuzzySearch";
+import { normalizeString } from "../utils/string";
 
 interface SupermarketsScreenProps {
   location: Location.LocationObject | null;
@@ -166,11 +166,6 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
     }
   }, [fetchSupermarketsData]);
 
-  const filteredMarkets = useMemo(
-    () => searchMarkets(markets, searchText),
-    [markets, searchText],
-  );
-
   const listHeader = useMemo(
     () => (
       <View style={styles.listHeader}>
@@ -229,7 +224,7 @@ export function SupermarketsScreen({ location }: SupermarketsScreenProps) {
         </View>
       ) : (
         <MarketList
-          markets={filteredMarkets}
+          markets={markets}
           handleMarketPress={handleMarketPress}
           listHeaderComponent={listHeader}
           listEmptyComponent={
