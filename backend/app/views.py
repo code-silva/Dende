@@ -167,10 +167,16 @@ class BranchProductOfferListView(generics.ListAPIView):
         user_latitude = self.request.query_params.get("latitude")
         user_longitude = self.request.query_params.get("longitude")
         market_id = self.request.query_params.get("marketId")
+        search = self.request.query_params.get("search") or self.request.query_params.get("query")
 
         queryset = BranchProductOffer.objects.select_related(
             "product", "product__category", "branch_supermarket__parent_supermarket"
         )
+
+        if search:
+            queryset = queryset.filter(
+                Q(product__name__icontains=search) | Q(product__brand__icontains=search)
+            )
 
         if market_id:
             return queryset.filter(branch_supermarket__id=market_id).order_by(

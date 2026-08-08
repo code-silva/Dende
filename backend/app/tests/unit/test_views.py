@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from model_bakery import baker
 
-from app.models import BranchProductOffer, BranchSupermarket, ParentSupermarket
+from app.models import BranchProductOffer, BranchSupermarket, ParentSupermarket, Product
 
 
 @pytest.mark.django_db
@@ -565,3 +565,118 @@ class TestBranchProductOfferListView:
         )
         results = response.data["results"]
         assert not results
+
+    def _create_market_with_products(self, names):
+        """Creates a market with one offer per product name and returns the branch."""
+        future_date = timezone.now().date() + timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        for name in names:
+            product = baker.make(Product, name=name, brand="Marca Teste", category=category)
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                product=product,
+                offer__expiration_date=future_date,
+            )
+        return branch
+
+    def test_search_within_market_filters_by_name(self, api_client, db):
+        """
+        Testing that the search term filters products of a specific market,
+        using the 'search' query parameter, case-insensitively.
+        """
+
+        branch = self._create_market_with_products(
+            ["Leite Integral", "Arroz Branco", "Feijão Carioca"]
+        )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "leite",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Leite Integral"]
+
+    def test_search_supports_query_alias(self, api_client, db):
+        """
+        Testing that the 'query' query parameter (used by the mobile app)
+        also filters products, keeping backwards compatibility.
+        """
+
+        branch = self._create_market_with_products(
+            ["Leite Integral", "Arroz Branco", "Feijão Carioca"]
+        )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "query": "ARROZ",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Arroz Branco"]
+
+    def test_search_without_match_returns_empty(self, api_client, db):
+        """
+        Testing that a search with no matches returns HTTP 200 and an empty list.
+        """
+
+        branch = self._create_market_with_products(["Leite Integral", "Arroz Branco"])
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "iteminexistente",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.data["results"] == []
+
+    def test_search_without_market_filters_by_distance(self, api_client, db):
+        """
+        Testing that the search term also applies when filtering by distance
+        (no marketId informed), returning only matching products nearby.
+        """
+
+        self._create_market_with_products(["Leite Integral", "Arroz Branco", "Feijão Carioca"])
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "search": "feijão",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Feijão Carioca"]
