@@ -1,3 +1,4 @@
+import { type RouteProp, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,19 +9,15 @@ import { MarketBanner } from "../components/MarketBanner";
 import ProductCard from "../components/ProductCard";
 import { SearchBar } from "../components/SearchBar";
 import { useProductsFetch } from "../hooks/useProductsFetch";
+import type { HomeStackParamList } from "../types/navigation";
 
-interface SearchResultsScreenProps {
-  route: {
-    params: {
-      query: string;
-      selectedMarket: { id: number; name: string };
-      latitude?: number;
-      longitude?: number;
-    };
-  };
-}
+type SearchResultsRouteProp = RouteProp<
+  HomeStackParamList,
+  "SearchResultsScreen"
+>;
 
-export function SearchResultsScreen({ route }: SearchResultsScreenProps) {
+export function SearchResultsScreen() {
+  const route = useRoute<SearchResultsRouteProp>();
   const { query, selectedMarket, latitude, longitude } = route.params;
 
   const { products, isLoading, hasMoreData, fetchData } = useProductsFetch({
