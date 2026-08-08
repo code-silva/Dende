@@ -11,6 +11,7 @@ import {
   Dimensions,
   Keyboard,
   Platform,
+  ScrollView,
   type StyleProp,
   StyleSheet,
   Text,
@@ -84,6 +85,13 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
       setIsFocused(false);
       onSearch?.(searchTerm);
       if (!disableApiSearch) fetchHybridSearch(searchTerm);
+    };
+
+    const handleSelectSuggestion = (suggestionText: string) => {
+      const trimmed = suggestionText.trim();
+      setTerm(trimmed);
+      setSuggestions([]);
+      handleSearchAction(trimmed);
     };
 
     useEffect(() => {
@@ -205,26 +213,30 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           term.length >= 2 &&
           suggestions.length > 0 && (
             <View style={styles.suggestionsContainer}>
-              {suggestions.map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={styles.suggestionItem}
-                  onPress={() => {
-                    setTerm(item);
-                    setSuggestions([]);
-                  }}
-                >
-                  <Feather
-                    name="search"
-                    size={16}
-                    color="#A0AAB2"
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text style={styles.suggestionText} numberOfLines={1}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
+                {suggestions.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      handleSelectSuggestion(item);
+                    }}
+                  >
+                    <Feather
+                      name="search"
+                      size={16}
+                      color="#A0AAB2"
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={styles.suggestionText} numberOfLines={1}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
@@ -322,16 +334,17 @@ const styles = StyleSheet.create({
     top: 65,
     left: 0,
     right: 0,
-    backgroundColor: "#FFF",
+    maxHeight: 250,
+    backgroundColor: "#FFFFFF",
     borderRadius: 15,
-    elevation: 5,
+    elevation: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     borderWidth: 1,
     borderColor: "#E0E4E8",
-    zIndex: 2000,
+    zIndex: 9999,
     overflow: "hidden",
   },
   suggestionItem: {

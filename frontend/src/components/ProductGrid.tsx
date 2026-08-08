@@ -81,6 +81,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
       ListFooterComponent={listFooterComponent}
       ListHeaderComponent={listHeaderComponent}
       ListEmptyComponent={listEmptyComponent}
+      keyboardShouldPersistTaps="handled"
     />
   );
 };
