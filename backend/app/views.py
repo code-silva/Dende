@@ -2,7 +2,8 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.postgres.lookups import Unaccent
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import F, Q
+from django.db import connection
+from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.db.models.functions import Greatest
 from django.utils import timezone
 from rest_framework import generics
@@ -162,6 +163,7 @@ class BranchCityListView(APIView):
 class BranchProductOfferListView(generics.ListAPIView):
     serializer_class = BranchProductOfferSerializer
     pagination_class = OffersPagination
+    SIMILARITY_THRESHOLD = 0.2
 
     def get_queryset(self):
         user_latitude = self.request.query_params.get("latitude")
@@ -173,15 +175,64 @@ class BranchProductOfferListView(generics.ListAPIView):
             "product", "product__category", "branch_supermarket__parent_supermarket"
         )
 
+        has_search = False
         if search:
-            queryset = queryset.filter(
-                Q(product__name__icontains=search) | Q(product__brand__icontains=search)
-            )
+            normalized_search = search.strip()
+            has_search = True
+            if connection.vendor == "postgresql":
+                # PostgreSQL: accent-insensitive lookup plus trigram similarity so
+                # searches without accents ('feijao' -> 'Feijão') and small typos
+                # ('fijao' -> 'Feijão') still match, using the enabled pg_trgm and
+                # unaccent extensions (migration 0004) and the GIN trgm indexes.
+                # Trigram similarity is only applied to name and brand; categories
+                # are short and generic, so their trigram similarity produces weak
+                # false positives (e.g. 'carne' vs 'Café/Açúcar' = 0.2) and exact
+                # category searches are already covered by the icontains lookup.
+                queryset = queryset.annotate(
+                    similarity_name=TrigramSimilarity(Unaccent("product__name"), normalized_search),
+                    similarity_brand=TrigramSimilarity(
+                        Unaccent("product__brand"), normalized_search
+                    ),
+                ).filter(
+                    Q(product__name__unaccent__icontains=normalized_search)
+                    | Q(product__brand__unaccent__icontains=normalized_search)
+                    | Q(product__category__name__unaccent__icontains=normalized_search)
+                    | Q(similarity_name__gte=self.SIMILARITY_THRESHOLD)
+                    | Q(similarity_brand__gte=self.SIMILARITY_THRESHOLD)
+                )
+                queryset = queryset.annotate(
+                    relevance=Case(
+                        When(product__name__unaccent__icontains=normalized_search, then=Value(4)),
+                        When(product__brand__unaccent__icontains=normalized_search, then=Value(3)),
+                        When(
+                            product__category__name__unaccent__icontains=normalized_search,
+                            then=Value(2),
+                        ),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+            else:
+                # SQLite (tests/CI): safe fallback without unaccent/pg_trgm.
+                queryset = queryset.filter(
+                    Q(product__name__icontains=normalized_search)
+                    | Q(product__brand__icontains=normalized_search)
+                    | Q(product__category__name__icontains=normalized_search)
+                ).annotate(
+                    relevance=Case(
+                        When(product__name__icontains=normalized_search, then=Value(4)),
+                        When(product__brand__icontains=normalized_search, then=Value(3)),
+                        When(product__category__name__icontains=normalized_search, then=Value(2)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
 
         if market_id:
-            return queryset.filter(branch_supermarket__id=market_id).order_by(
-                "product__category__priority"
-            )
+            queryset = queryset.filter(branch_supermarket__id=market_id)
+            if has_search:
+                return queryset.order_by("-relevance", "product__category__priority")
+            return queryset.order_by("product__category__priority")
 
         try:
             user_location = Point(float(user_longitude), float(user_latitude), srid=4326)
@@ -189,12 +240,9 @@ class BranchProductOfferListView(generics.ListAPIView):
             return queryset.order_by("product__category__priority")
 
         MAXIMUM_RADIUS_METERS = 5000
-        results = (
-            queryset.filter(
-                branch_supermarket__coordinates__dwithin=(user_location, MAXIMUM_RADIUS_METERS)
-            )
-            .annotate(distance=Distance("branch_supermarket__coordinates", user_location))
-            .order_by("product__category__priority", "distance")
-        )
-
-        return results
+        results = queryset.filter(
+            branch_supermarket__coordinates__dwithin=(user_location, MAXIMUM_RADIUS_METERS)
+        ).annotate(distance=Distance("branch_supermarket__coordinates", user_location))
+        if has_search:
+            return results.order_by("-relevance", "product__category__priority", "distance")
+        return results.order_by("product__category__priority", "distance")
