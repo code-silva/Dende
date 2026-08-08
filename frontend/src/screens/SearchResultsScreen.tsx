@@ -85,7 +85,7 @@ export function SearchResultsScreen({ route }: SearchResultsScreenProps) {
           </View>
         )}
         numColumns={2}
-        onEndReached={fetchData}
+        onEndReached={() => fetchData()}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         columnWrapperStyle={styles.gridRow}

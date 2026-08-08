@@ -103,7 +103,7 @@ export const HomeScreen = memo(function HomeScreen({
         products={products}
         handlePress={handlePress}
         handleAddToList={handleAdd}
-        onEndReached={fetchData}
+        onEndReached={() => fetchData()}
         onEndReachedThreshold={0.7}
         listFooterComponent={renderFooter()}
         listHeaderComponent={
