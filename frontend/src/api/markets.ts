@@ -9,16 +9,15 @@ export async function fetchMarkets(
   longitude?: number,
   address?: string,
   city?: string | null,
-  radiusInKm?: number,
+  radiusInKm: number = 50,
   signal?: AbortSignal,
 ): Promise<Market[]> {
   const url = new URL(`${BASE_URL}/nearby-markets/`);
   url.searchParams.append("latitude", String(latitude));
   url.searchParams.append("longitude", String(longitude));
+  url.searchParams.append("radiusInKm", String(radiusInKm));
   if (address) url.searchParams.append("address", address);
   if (city) url.searchParams.append("city", city);
-  if (radiusInKm != null)
-    url.searchParams.append("radiusInKm", String(radiusInKm));
 
   const response = await fetch(url, { signal });
   const data = await response.json();

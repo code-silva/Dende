@@ -23,58 +23,16 @@ class HybridSearchView(APIView):
     View responsible for performing a unified search across both product offers and
     supermarkets. It uses trigram similarity and text filtering to find relevant
     results based on names, brands, or categories.
-
-    Query params:
-      - query: search term (required). It is trimmed, lowercased and accent-stripped
-        before matching so that "feijao" finds "Feijão" and "sabao" finds "Sabão".
-      - scope: when "products", applies the accent-insensitive fuzzy ranking tuned
-        for the product search on the Supermarkets screen. Other consumers of this
-        endpoint (home, search results) keep the legacy behavior by default.
     """
 
-    SIMILARITY_THRESHOLD = 0.25
-
     def get(self, request):
-        query = normalize_search_query(request.GET.get("query", ""))
-        scope = request.GET.get("scope")
+        query = normalize_search_query(request.GET.get("query", "").strip())
+        SIMILARITY_THRESHOLD = 0.25
 
         if not query:
             return Response({"offers": []})
 
-        offers = self._search_products(query) if scope == "products" else self._search_legacy(query)
-
-        return Response({"offers": BranchProductOfferSerializer(offers, many=True).data})
-
-    def _search_products(self, query):
-        """
-        Accent-insensitive trigram search ordered by combined relevance.
-        Uses Unaccent() on the indexed fields so accented values ("Feijão")
-        reach high similarity against de-accented queries ("feijao").
-        """
-        return (
-            BranchProductOffer.objects.annotate(
-                similarity_name=TrigramSimilarity(Unaccent("product__name"), query),
-                similarity_brand=TrigramSimilarity(Unaccent("product__brand"), query),
-                relevance=Greatest(F("similarity_name"), F("similarity_brand")),
-            )
-            .filter(
-                Q(product__name__unaccent__icontains=query)
-                | Q(product__brand__unaccent__icontains=query)
-                | Q(product__category__name__unaccent__icontains=query)
-                | Q(similarity_name__gt=self.SIMILARITY_THRESHOLD)
-                | Q(similarity_brand__gt=self.SIMILARITY_THRESHOLD)
-            )
-            .select_related(
-                "product",
-                "product__category",
-                "branch_supermarket__parent_supermarket",
-            )
-            .order_by("-relevance", "-similarity_name")
-        )
-
-    def _search_legacy(self, query):
-        """Keeps the original behavior for consumers that do not pass scope=products."""
-        return (
+        offers = (
             BranchProductOffer.objects.annotate(
                 similarity_name=TrigramSimilarity("product__name", query),
                 similarity_brand=TrigramSimilarity("product__brand", query),
@@ -83,8 +41,8 @@ class HybridSearchView(APIView):
                 Q(product__name__unaccent__icontains=query)
                 | Q(product__brand__unaccent__icontains=query)
                 | Q(product__category__name__unaccent__icontains=query)
-                | Q(similarity_name__gt=self.SIMILARITY_THRESHOLD)
-                | Q(similarity_brand__gt=self.SIMILARITY_THRESHOLD)
+                | Q(similarity_name__gt=SIMILARITY_THRESHOLD)
+                | Q(similarity_brand__gt=SIMILARITY_THRESHOLD)
             )
             .select_related(
                 "product",
@@ -94,19 +52,21 @@ class HybridSearchView(APIView):
             .order_by("-similarity_name")
         )
 
+        return Response({"offers": BranchProductOfferSerializer(offers, many=True).data})
+
 
 class BranchSupermarketListView(generics.ListAPIView):
     """
     View responsible for returning supermarkets to the frontend.
     Lists all active markets, ordered by distance from the user.
     An optional radius (radiusInKm) can restrict results to a configurable
-    distance; when omitted, no distance limit is applied.
+    distance; when omitted, a default limit of 50 km is applied.
 
     Query params:
       - latitude, longitude (used for distance calculation)
       - address (optional search term, enables fuzzy matching via pg_trgm)
       - city (optional accent/case-insensitive city filter)
-      - radiusInKm (optional distance limit, e.g. "30")
+      - radiusInKm (optional distance limit, e.g. "30"; defaults to "50")
     """
 
     serializer_class = BranchSupermarketSerializer
@@ -118,7 +78,7 @@ class BranchSupermarketListView(generics.ListAPIView):
         user_longitude = self.request.query_params.get("longitude")
         city_filter = self.request.query_params.get("city")
         address_search = self.request.query_params.get("address")
-        radius_override = self.request.query_params.get("radiusInKm")
+        radius_override = self.request.query_params.get("radiusInKm") or "50"
 
         queryset = (
             BranchSupermarket.objects.select_related(
