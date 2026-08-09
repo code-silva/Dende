@@ -35,7 +35,7 @@ export const styles = StyleSheet.create({
     width: "100%",
     paddingBottom: 10,
     alignSelf: "stretch",
-    zIndex: 10,
+    zIndex: 1000,
     overflow: "visible",
   },
   sectionTitle: {

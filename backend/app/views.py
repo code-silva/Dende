@@ -96,6 +96,8 @@ class HybridSearchView(APIView):
             relevance=self._relevance_case(relevance_lookup, query)
         ).order_by(*ordering)
 
+        offers = offers[:5]
+
         return Response({"offers": BranchProductOfferSerializer(offers, many=True).data})
 
 

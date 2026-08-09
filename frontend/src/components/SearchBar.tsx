@@ -11,7 +11,6 @@ import {
   Dimensions,
   Keyboard,
   Platform,
-  ScrollView,
   type StyleProp,
   StyleSheet,
   Text,
@@ -91,6 +90,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
       const trimmed = suggestionText.trim();
       setTerm(trimmed);
       setSuggestions([]);
+      setIsFocused(false);
       handleSearchAction(trimmed);
     };
 
@@ -139,11 +139,11 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           const data = await fetchHybridSearch(term);
 
           if (data.offers) {
-            const productNames = data.offers.map(
+            const productNames: string[] = data.offers.map(
               (item: Product) => item.productName,
             );
             const uniqueNames = Array.from(new Set(productNames));
-            setSuggestions(uniqueNames as string[]);
+            setSuggestions(uniqueNames.slice(0, 5));
           }
           setIsSearchPerformed(true);
         } catch (error) {
@@ -176,7 +176,9 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
             returnKeyType="search"
             onSubmitEditing={() => handleSearchAction(term)}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onBlur={() => {
+              setTimeout(() => setIsFocused(false), 200);
+            }}
           />
 
           <View style={styles.iconContainer}>
@@ -213,30 +215,25 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           term.length >= 2 &&
           suggestions.length > 0 && (
             <View style={styles.suggestionsContainer}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-              >
-                {suggestions.map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      handleSelectSuggestion(item);
-                    }}
-                  >
-                    <Feather
-                      name="search"
-                      size={16}
-                      color="#A0AAB2"
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text style={styles.suggestionText} numberOfLines={1}>
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {suggestions.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    handleSelectSuggestion(item);
+                  }}
+                >
+                  <Feather
+                    name="search"
+                    size={16}
+                    color="#A0AAB2"
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={styles.suggestionText} numberOfLines={1}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
@@ -331,13 +328,12 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     position: "absolute",
-    top: 65,
+    top: 60,
     left: 0,
     right: 0,
-    maxHeight: 250,
     backgroundColor: "#FFFFFF",
     borderRadius: 15,
-    elevation: 10,
+    elevation: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -350,7 +346,7 @@ const styles = StyleSheet.create({
   suggestionItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F2F5",
