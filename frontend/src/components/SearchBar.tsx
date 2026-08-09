@@ -37,7 +37,6 @@ export interface SearchBarHandle {
 interface SearchBarProps {
   initialValue?: string;
   placeholder?: string;
-  onChangeText?: (text: string) => void;
   onSearch?: (text: string) => void;
   onDebouncedChange?: (text: string) => void;
   disableApiSearch?: boolean;
@@ -49,7 +48,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
     {
       initialValue = "",
       placeholder = "Busque por produtos...",
-      onChangeText,
       onSearch,
       onDebouncedChange,
       disableApiSearch = false,
@@ -97,10 +95,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
     useEffect(() => {
       setTerm(initialValue);
     }, [initialValue]);
-
-    useEffect(() => {
-      onChangeText?.(term);
-    }, [term, onChangeText]);
 
     useEffect(() => {
       if (!onDebouncedChange) return;

@@ -9,6 +9,7 @@ import { MarketBanner } from "../components/MarketBanner";
 import { ProductGrid } from "../components/ProductGrid";
 import { SearchBar } from "../components/SearchBar";
 import { useProductsFetch } from "../hooks/useProductsFetch";
+import type { Product } from "../types/product";
 
 interface StoreProductsScreenProps {
   route: {
@@ -60,6 +61,14 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
     },
     [fetchData],
   );
+
+  const handleProductPress = useCallback((_product: Product) => {
+    // TODO: navigate to product detail screen
+  }, []);
+
+  const handleAddToList = useCallback((_product: Product) => {
+    // TODO: add to persistent shopping list
+  }, []);
 
   const headerElement = (
     <View style={styles.headerContainer}>
@@ -132,12 +141,8 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
       ) : (
         <ProductGrid
           products={products}
-          handlePress={(product) =>
-            console.log("Details for:", product.productName)
-          }
-          handleAddToList={(product) =>
-            console.log("Add to List:", product.productName)
-          }
+          handlePress={handleProductPress}
+          handleAddToList={handleAddToList}
           onEndReached={() => fetchData()}
           onEndReachedThreshold={0.7}
           listHeaderComponent={headerElement}

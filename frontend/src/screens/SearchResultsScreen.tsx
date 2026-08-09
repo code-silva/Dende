@@ -61,11 +61,11 @@ export function SearchResultsScreen() {
   }, []);
 
   const handleProductPress = useCallback((_product: Product) => {
-    console.log("Clicked on product");
+    // TODO: navigate to product detail screen
   }, []);
 
   const handleAddToList = useCallback((_product: Product) => {
-    console.log("Added to list");
+    // TODO: add to persistent shopping list
   }, []);
 
   const renderFooter = () => {

@@ -129,18 +129,6 @@ const styles = StyleSheet.create({
     padding: 10,
     elevation: 4,
   },
-  listStyle: {
-    width: "100%",
-    maxWidth: 450,
-    alignSelf: "center",
-    marginVertical: 12,
-  },
-  gridStyle: {
-    flex: 1,
-    margin: 8,
-    padding: 8,
-    minHeight: 280,
-  },
   imageContainer: {
     width: "100%",
     aspectRatio: 1,
@@ -235,26 +223,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#888",
     textTransform: "uppercase",
-  },
-  brandWrapper: {
-    flex: 1,
-  },
-  footerLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  weightLabel: {
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  weightText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#666",
   },
   distanceWrapper: {
     alignItems: "flex-end",
