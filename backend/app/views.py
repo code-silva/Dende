@@ -5,7 +5,6 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db import connection
 from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.db.models.functions import Greatest
-from django.utils import timezone
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -56,7 +55,7 @@ class HybridSearchView(APIView):
         if not query:
             return Response({"offers": []})
 
-        offers = BranchProductOffer.objects.select_related(
+        offers = BranchProductOffer.objects.valid().select_related(
             "product",
             "product__category",
             "branch_supermarket__parent_supermarket",
@@ -92,9 +91,9 @@ class HybridSearchView(APIView):
             ordering = ["-relevance"]
             relevance_lookup = "__icontains"
 
-        offers = offers.annotate(
-            relevance=self._relevance_case(relevance_lookup, query)
-        ).order_by(*ordering)
+        offers = offers.annotate(relevance=self._relevance_case(relevance_lookup, query)).order_by(
+            *ordering
+        )
 
         offers = offers[:5]
 
@@ -127,10 +126,10 @@ class BranchSupermarketListView(generics.ListAPIView):
         radius_override = self.request.query_params.get("radiusInKm") or "50"
 
         queryset = (
-            BranchSupermarket.objects.select_related(
+            BranchSupermarket.objects.filter(product_offers__in=BranchProductOffer.objects.valid())
+            .select_related(
                 "parent_supermarket",
             )
-            .filter(product_offers__offer__expiration_date__gte=timezone.now().date())
             .distinct()
         )
 
@@ -195,9 +194,7 @@ class BranchCityListView(APIView):
 
     def get(self, request):
         active_cities = (
-            BranchSupermarket.objects.filter(
-                product_offers__offer__expiration_date__gte=timezone.now().date()
-            )
+            BranchSupermarket.objects.filter(product_offers__in=BranchProductOffer.objects.valid())
             .values_list("city", flat=True)
             .distinct()
             .order_by("city")
@@ -216,7 +213,7 @@ class BranchProductOfferListView(generics.ListAPIView):
         market_id = self.request.query_params.get("marketId")
         search = self.request.query_params.get("search") or self.request.query_params.get("query")
 
-        queryset = BranchProductOffer.objects.select_related(
+        queryset = BranchProductOffer.objects.valid().select_related(
             "product", "product__category", "branch_supermarket__parent_supermarket"
         )
 

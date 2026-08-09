@@ -501,9 +501,7 @@ class TestHybridSearchView:
             offer=baker.make("app.Offer", expiration_date=future_date),
         )
 
-        response = api_client.get(
-            self.URL, {"query": "feijao", "marketId": branch.id}
-        )
+        response = api_client.get(self.URL, {"query": "feijao", "marketId": branch.id})
 
         results = response.data["offers"]
         ordered_names = [offer["productName"] for offer in results]
@@ -846,3 +844,135 @@ class TestBranchProductOfferListView:
 
         assert response.status_code == 200
         assert [result["productName"] for result in results] == ["Picanha"]
+
+
+@pytest.mark.django_db
+class TestValidOffersScope:
+    """
+    Class destined to the elaboration of tests of the 'valid' manager scope
+    and its enforcement across all API endpoints.
+    """
+
+    def _create_branch_with_valid_and_expired_offers(self):
+        """Creates a branch with one valid and one expired offer."""
+        future_date = timezone.now().date() + timedelta(days=7)
+        past_date = timezone.now().date() - timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        valid_offer = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="Leite Integral", brand="Marca Teste", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+        expired_offer = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="Leite Desnatado", brand="Marca Teste", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=past_date),
+        )
+        return valid_offer, expired_offer
+
+    def test_manager_valid_filters_expired_offers(self):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        valid_ids = list(BranchProductOffer.objects.valid().values_list("id", flat=True))
+
+        assert valid_offer.id in valid_ids
+        assert expired_offer.id not in valid_ids
+
+    def test_search_view_excludes_expired_offers(self, api_client):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        response = api_client.get(reverse("search"), {"query": "leite"})
+
+        assert response.status_code == 200
+        names = [offer["productName"] for offer in response.data["offers"]]
+        assert valid_offer.product.name in names
+        assert expired_offer.product.name not in names
+
+    def test_offers_list_view_excludes_expired_offers(self, api_client):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        response = api_client.get(reverse("offers_list"))
+
+        assert response.status_code == 200
+        names = [offer["productName"] for offer in response.data["results"]]
+        assert valid_offer.product.name in names
+        assert expired_offer.product.name not in names
+
+    def _create_active_and_expired_markets(self):
+        """Creates one market with a valid offer and another with only expired offers."""
+        future_date = timezone.now().date() + timedelta(days=7)
+        past_date = timezone.now().date() - timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        coordinates = Point(-47.9292, -15.7801, srid=4326)
+
+        active_parent = baker.make(ParentSupermarket, name="Active Market")
+        active_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=active_parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=coordinates,
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=active_branch,
+            product__name="Leite Integral",
+            product__category=category,
+            price="10.00",
+            offer__expiration_date=future_date,
+        )
+
+        expired_parent = baker.make(ParentSupermarket, name="Expired Market")
+        expired_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=expired_parent,
+            state="DF",
+            city="Taguatinga",
+            address="QNM 01",
+            coordinates=coordinates,
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=expired_branch,
+            product__name="Leite Desnatado",
+            product__category=category,
+            price="10.00",
+            offer__expiration_date=past_date,
+        )
+
+        return active_parent.name, expired_parent.name
+
+    def test_nearby_markets_view_excludes_markets_with_only_expired_offers(self, api_client):
+        active_market, expired_market = self._create_active_and_expired_markets()
+
+        response = api_client.get(reverse("nearby_markets"))
+
+        assert response.status_code == 200
+        market_names = [market["name"] for market in response.data["results"]]
+        assert active_market in market_names
+        assert expired_market not in market_names
+
+    def test_cities_view_excludes_cities_with_only_expired_offers(self, api_client):
+        self._create_active_and_expired_markets()
+
+        response = api_client.get(reverse("cities_list"))
+
+        assert response.status_code == 200
+        assert "Gama" in response.data
+        assert "Taguatinga" not in response.data
