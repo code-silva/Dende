@@ -1,15 +1,16 @@
 import { type RouteProp, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmptyProductState } from "../components/EmptyProductState";
 import { InfoBanner } from "../components/InfoBanner";
 import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketBanner } from "../components/MarketBanner";
-import ProductCard from "../components/ProductCard";
+import { ProductGrid } from "../components/ProductGrid";
 import { SearchBar } from "../components/SearchBar";
 import { useProductsFetch } from "../hooks/useProductsFetch";
 import type { HomeStackParamList } from "../types/navigation";
+import type { Product } from "../types/product";
 
 type SearchResultsRouteProp = RouteProp<
   HomeStackParamList,
@@ -19,6 +20,7 @@ type SearchResultsRouteProp = RouteProp<
 export function SearchResultsScreen() {
   const route = useRoute<SearchResultsRouteProp>();
   const { query, selectedMarket, latitude, longitude } = route.params;
+  const insets = useSafeAreaInsets();
 
   const { products, isLoading, hasMoreData, fetchData } = useProductsFetch({
     latitude,
@@ -30,7 +32,7 @@ export function SearchResultsScreen() {
   // --- SEARCH HEADER COMPONENT ---
   const SearchHeader = useCallback(
     () => (
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
         <SearchBar initialValue={query} />
 
         {selectedMarket && (
@@ -49,12 +51,20 @@ export function SearchResultsScreen() {
         </Text>
       </View>
     ),
-    [query, selectedMarket],
+    [insets, query, selectedMarket],
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initial fetch on mount
   useEffect(() => {
     fetchData();
+  }, []);
+
+  const handleProductPress = useCallback((_product: Product) => {
+    console.log("Clicked on product");
+  }, []);
+
+  const handleAddToList = useCallback((_product: Product) => {
+    console.log("Added to list");
   }, []);
 
   const renderFooter = () => {
@@ -82,48 +92,36 @@ export function SearchResultsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8F9FA" }}>
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item, index }) => (
-          <View style={styles.cardWrapper}>
-            <ProductCard
-              product={{ ...item, ranking: index + 1 }}
-              handlePress={() => console.log("Clicked on product")}
-              handleAddToList={() => console.log("Added to list")}
-            />
-          </View>
-        )}
-        numColumns={2}
+    <View style={styles.container}>
+      <ProductGrid
+        products={products}
+        handlePress={handleProductPress}
+        handleAddToList={handleAddToList}
         onEndReached={() => fetchData()}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={renderEmpty()}
-        columnWrapperStyle={styles.gridRow}
-        ListHeaderComponent={SearchHeader}
-        contentContainerStyle={styles.gridContainer}
-        showsVerticalScrollIndicator={false}
+        listFooterComponent={renderFooter()}
+        listHeaderComponent={<SearchHeader />}
+        listEmptyComponent={renderEmpty()}
+        contentContainerStyle={[
+          styles.gridContainer,
+          { paddingBottom: insets.bottom + 5 },
+        ]}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F8F9FA",
+  },
   headerContainer: {
     paddingBottom: 10,
   },
   gridContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  gridRow: {
-    justifyContent: "space-between",
-  },
-  cardWrapper: {
-    flex: 1,
-    marginHorizontal: 5,
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   resultsText: {
     fontSize: 16,

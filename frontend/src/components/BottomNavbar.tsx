@@ -155,6 +155,10 @@ export function BottomNavbar({
             paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
           },
 
+          sceneContainerStyle: {
+            backgroundColor: "#F8F9FA",
+          },
+
           tabBarButton: (props) => (
             <CustomTabButton {...props} route={route} isFocused={isFocused} />
           ),
