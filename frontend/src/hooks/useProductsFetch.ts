@@ -46,8 +46,8 @@ export function useProductsFetch(props: UseProductsFetchProps) {
 
       try {
         const response = await fetchProducts(
-          propsRef.current.latitude || 0,
-          propsRef.current.longitude || 0,
+          propsRef.current.latitude,
+          propsRef.current.longitude,
           pageRef.current,
           normalizedQuery,
           propsRef.current.marketId,

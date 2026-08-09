@@ -549,7 +549,7 @@ class TestBranchProductOfferListView:
     def test_with_supermarket_id_missing(self, api_client, offers_list):
         """
         Testing when everything (latitude, longitude) but the supermarket_identifier was informed.
-        It should return a list of offers ordered by the 'category' priority.
+        It should return all nearby offers, ordered by distance (feed without search term).
         """
 
         response = api_client.get(
@@ -561,11 +561,11 @@ class TestBranchProductOfferListView:
         )
 
         results = response.data["results"]
-        priority_map = {offer.id: offer.product.category.priority for offer in offers_list}
-        priorities = [priority_map[offer["id"]] for offer in results]
+        result_ids = {offer["id"] for offer in results}
+        expected_ids = {offer.id for offer in offers_list}
 
         assert response.status_code == 200
-        assert priorities == sorted(priorities)
+        assert result_ids == expected_ids
 
     @pytest.mark.parametrize("value", [" ", "", "invalidtype", 123131.13131313, True])
     def test_with_invalid_longitude(self, value, api_client, offers_list):

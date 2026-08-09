@@ -205,7 +205,7 @@ class BranchCityListView(APIView):
 class BranchProductOfferListView(generics.ListAPIView):
     serializer_class = BranchProductOfferSerializer
     pagination_class = OffersPagination
-    SIMILARITY_THRESHOLD = 0.2
+    SIMILARITY_THRESHOLD = 0.5
 
     def get_queryset(self):
         user_latitude = self.request.query_params.get("latitude")
@@ -219,17 +219,17 @@ class BranchProductOfferListView(generics.ListAPIView):
 
         has_search = False
         if search:
-            normalized_search = search.strip()
+            normalized_search = normalize_search_query(search)
             has_search = True
             if connection.vendor == "postgresql":
                 # PostgreSQL: accent-insensitive lookup plus trigram similarity so
                 # searches without accents ('feijao' -> 'Feijão') and small typos
                 # ('fijao' -> 'Feijão') still match, using the enabled pg_trgm and
                 # unaccent extensions (migration 0004) and the GIN trgm indexes.
-                # Trigram similarity is only applied to name and brand; categories
-                # are short and generic, so their trigram similarity produces weak
-                # false positives (e.g. 'carne' vs 'Café/Açúcar' = 0.2) and exact
-                # category searches are already covered by the icontains lookup.
+                # Trigram similarity is only applied to name and brand, with a high
+                # threshold (0.5) so only close matches ('fijao' ~ 0.57) enter and
+                # weak category-like false positives are discarded; exact category
+                # searches are already covered by the icontains lookup.
                 queryset = queryset.annotate(
                     similarity_name=TrigramSimilarity(Unaccent("product__name"), normalized_search),
                     similarity_brand=TrigramSimilarity(
@@ -256,10 +256,15 @@ class BranchProductOfferListView(generics.ListAPIView):
                 )
             else:
                 # SQLite (tests/CI): safe fallback without unaccent/pg_trgm.
+                # The raw (unnormalized) term is matched as well so accented
+                # data ('Feijão') can still be found in this test-only backend.
                 queryset = queryset.filter(
                     Q(product__name__icontains=normalized_search)
+                    | Q(product__name__icontains=search)
                     | Q(product__brand__icontains=normalized_search)
+                    | Q(product__brand__icontains=search)
                     | Q(product__category__name__icontains=normalized_search)
+                    | Q(product__category__name__icontains=search)
                 ).annotate(
                     relevance=Case(
                         When(product__name__icontains=normalized_search, then=Value(4)),
@@ -279,12 +284,25 @@ class BranchProductOfferListView(generics.ListAPIView):
         try:
             user_location = Point(float(user_longitude), float(user_latitude), srid=4326)
         except (ValueError, TypeError):
+            user_location = None
+
+        if has_search:
+            # Global keyword search: distance is only calculated and used for
+            # ordering (relevance first, then proximity), never to exclude
+            # offers regardless of how far the branch is registered.
+            if user_location is not None:
+                results = queryset.annotate(
+                    distance=Distance("branch_supermarket__coordinates", user_location)
+                )
+                return results.order_by("-relevance", "distance", "price")
+            return queryset.order_by("-relevance", "price")
+
+        # Home feed without a search term: restrict to nearby branches.
+        if user_location is None:
             return queryset.order_by("product__category__priority")
 
         MAXIMUM_RADIUS_METERS = 5000
         results = queryset.filter(
             branch_supermarket__coordinates__dwithin=(user_location, MAXIMUM_RADIUS_METERS)
         ).annotate(distance=Distance("branch_supermarket__coordinates", user_location))
-        if has_search:
-            return results.order_by("-relevance", "product__category__priority", "distance")
-        return results.order_by("product__category__priority", "distance")
+        return results.order_by("distance", "price")
