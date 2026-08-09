@@ -2,8 +2,9 @@ import { type RouteProp, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AiInfoBanner } from "../components/AiInfoBanner";
 import { EmptyProductState } from "../components/EmptyProductState";
-import { InfoBanner } from "../components/InfoBanner";
+import { EmptySearchState } from "../components/EmptySearchState";
 import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketBanner } from "../components/MarketBanner";
 import { ProductGrid } from "../components/ProductGrid";
@@ -42,7 +43,7 @@ export function SearchResultsScreen() {
           />
         )}
 
-        <InfoBanner />
+        <AiInfoBanner />
 
         <Text style={styles.resultsText}>
           {selectedMarket
@@ -79,16 +80,7 @@ export function SearchResultsScreen() {
 
   const renderEmpty = () => {
     if (isLoading) return null;
-    return (
-      <View style={styles.emptyStateContainer}>
-        <Text style={styles.emptyStateTitle}>
-          Nenhum produto encontrado para sua busca
-        </Text>
-        <Text style={styles.emptyStateSubtitle}>
-          Tente buscar por outro termo ou verifique a ortografia do que digitou.
-        </Text>
-      </View>
-    );
+    return <EmptySearchState query={query} />;
   };
 
   return (
@@ -129,25 +121,5 @@ const styles = StyleSheet.create({
     color: "#333",
     marginVertical: 15,
     marginLeft: 10,
-  },
-  emptyStateContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    marginTop: 24,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontFamily: "Inter-Bold",
-    color: "#333333",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    fontFamily: "Inter-Regular",
-    color: "#888888",
-    textAlign: "center",
-    lineHeight: 20,
   },
 });

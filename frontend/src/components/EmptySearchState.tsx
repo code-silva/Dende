@@ -1,16 +1,31 @@
-import { Feather } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-export const EmptySearchState = memo(function EmptySearchState() {
+interface EmptySearchStateProps {
+  query?: string;
+}
+
+export const EmptySearchState = memo(function EmptySearchState({
+  query,
+}: EmptySearchStateProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.iconWrapper}>
-        <Feather name="help-circle" size={40} color="#A0AAB2" />
+      <View style={styles.iconCircle}>
+        <MaterialCommunityIcons
+          name="help-circle-outline"
+          size={40}
+          color="#A0AAB2"
+        />
       </View>
-      <Text style={styles.title}>Nenhum produto encontrado neste mercado</Text>
+      <Text style={styles.title}>
+        {query
+          ? `Nenhum resultado para "${query}"`
+          : "Nenhum produto encontrado"}
+      </Text>
       <Text style={styles.subtitle}>
-        Tente buscar por outro termo ou verifique a ortografia do que digitou.
+        Verifique a ortografia do termo pesquisado ou tente buscar por um
+        produto similar.
       </Text>
     </View>
   );
@@ -23,7 +38,13 @@ const styles = StyleSheet.create({
     padding: 24,
     marginTop: 24,
   },
-  iconWrapper: {
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#EFF3F6",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
   title: {

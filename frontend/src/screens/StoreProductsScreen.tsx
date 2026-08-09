@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AiInfoBanner } from "../components/AiInfoBanner";
 import { EmptyProductState } from "../components/EmptyProductState";
 import { EmptySearchState } from "../components/EmptySearchState";
 import { LoadingFooter } from "../components/LoadingFooter";
@@ -66,6 +67,10 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
         marketName={displayName}
         subtitle="OFERTAS DESTA UNIDADE"
       ></MarketBanner>
+
+      <View style={styles.aiBannerWrapper}>
+        <AiInfoBanner />
+      </View>
     </View>
   );
 
@@ -83,7 +88,7 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
   };
 
   const listEmptyComponent = isSearchEmpty ? (
-    <EmptySearchState />
+    <EmptySearchState query={searchTerm} />
   ) : (
     <EmptyProductState isSearchEmpty={false} />
   );
@@ -149,6 +154,9 @@ const styles = StyleSheet.create({
   headerContainer: {
     width: "100%",
     paddingBottom: 10,
+  },
+  aiBannerWrapper: {
+    marginBottom: 12,
   },
   centered: {
     flex: 1,
