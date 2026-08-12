@@ -139,6 +139,9 @@ STATIC_URL = "static/"
 # Gemini AI Studio Configuration (Free Tier Models & Quota Settings)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Google Maps API Configuration
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+
 
 # Celery Config
 CELERY_BROKER_URL = "redis://redis:6379/0"
@@ -176,11 +179,22 @@ LOGGING = {
             "formatter": "colored",
         },
     },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
     "loggers": {
         "app": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
+        "celery": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
+
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False

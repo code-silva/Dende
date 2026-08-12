@@ -24,6 +24,15 @@ def _scrap(url: str) -> BeautifulSoup:
     return BeautifulSoup(response.text, "html.parser")
 
 
+def _extract_clean_text(soup: BeautifulSoup) -> str:
+    """
+    Extracts text from a BeautifulSoup object while removing scripts and styles.
+    """
+    for element in soup(["script", "style", "head"]):
+        element.extract()
+    return soup.get_text(separator=" ", strip=True)
+
+
 def _get_supermarkets_links(soup: BeautifulSoup) -> list[str]:
     """
     Reads a BeautifulSoup object and returns any links
@@ -128,6 +137,7 @@ def download_supermarket_flyers(supermarket_url: str) -> tuple[Path, int]:
     Scraps a single supermarket link, downloads its flyers images,
     and returns a tuple containing the folder path where they were saved
     and the total count of downloaded images.
+    It also saves the clean text of the page to be used for branch address extraction.
     """
 
     soup = _scrap(supermarket_url)
@@ -138,5 +148,9 @@ def download_supermarket_flyers(supermarket_url: str) -> tuple[Path, int]:
 
     supermarket_folder = _create_supermarket_folder(supermarket_url)
     download_count = _download_images_to_folder(images_links, supermarket_folder)
+
+    clean_text = _extract_clean_text(soup)
+    text_path = supermarket_folder / "page_text.txt"
+    text_path.write_text(clean_text, encoding="utf-8")
 
     return supermarket_folder, download_count

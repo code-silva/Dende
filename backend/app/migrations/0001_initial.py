@@ -67,8 +67,8 @@ class Migration(migrations.Migration):
             name='Product',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('brand', models.CharField(max_length=100)),
+                ('name', models.CharField(max_length=50)),
+                ('brand', models.CharField(max_length=50)),
                 ('measurement', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('image', models.ImageField(upload_to='products/')),
                 ('measurement_unit', models.CharField(choices=[('KG', 'KG'), ('G', 'G'), ('L', 'L'), ('ML', 'ML'), ('UN', 'UN')], default='UN', max_length=50)),
