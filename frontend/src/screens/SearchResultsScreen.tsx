@@ -1,6 +1,11 @@
-import { type RouteProp, useRoute } from "@react-navigation/native";
-import { useCallback, useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  type RouteProp,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type FlatList, Keyboard, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AiInfoBanner } from "../components/AiInfoBanner";
 import { EmptyProductState } from "../components/EmptyProductState";
@@ -18,23 +23,61 @@ type SearchResultsRouteProp = RouteProp<
   "SearchResultsScreen"
 >;
 
+type SearchResultsNavigationProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  "SearchResultsScreen"
+>;
+
 export function SearchResultsScreen() {
   const route = useRoute<SearchResultsRouteProp>();
-  const { query, selectedMarket, latitude, longitude } = route.params;
+  const navigation = useNavigation<SearchResultsNavigationProp>();
+  const { selectedMarket, latitude, longitude } = route.params;
   const insets = useSafeAreaInsets();
+
+  const [searchTerm, setSearchTerm] = useState(route.params.query);
+  const listRef = useRef<FlatList<Product>>(null);
 
   const { products, isLoading, hasMoreData, fetchData } = useProductsFetch({
     latitude,
     longitude,
-    query,
+    query: searchTerm,
     marketId: selectedMarket?.id,
   });
+
+  // Keeps the single source of truth in sync when route params change
+  // (e.g. a new query submitted from this screen or re-navigation).
+  useEffect(() => {
+    setSearchTerm(route.params.query);
+  }, [route.params.query]);
+
+  const initialFetchRef = useRef(false);
+
+  useEffect(() => {
+    if (!initialFetchRef.current) {
+      initialFetchRef.current = true;
+      fetchData();
+    }
+  }, [fetchData]);
+
+  const handleSearchSubmit = useCallback(
+    (text: string) => {
+      Keyboard.dismiss();
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      setSearchTerm(trimmed);
+      navigation.setParams({ query: trimmed });
+      fetchData(trimmed, true);
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    },
+    [fetchData, navigation],
+  );
 
   // --- SEARCH HEADER COMPONENT ---
   const SearchHeader = useCallback(
     () => (
       <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
-        <SearchBar initialValue={query} />
+        <SearchBar initialValue={searchTerm} onSearch={handleSearchSubmit} />
 
         {selectedMarket && (
           <MarketBanner
@@ -48,25 +91,12 @@ export function SearchResultsScreen() {
         <Text style={styles.resultsText}>
           {selectedMarket
             ? `Produtos em ${selectedMarket.name}`
-            : `Resultados para "${query}"`}
+            : `Resultados para "${searchTerm}"`}
         </Text>
       </View>
     ),
-    [insets, query, selectedMarket],
+    [insets, searchTerm, selectedMarket, handleSearchSubmit],
   );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: initial fetch on mount
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleProductPress = useCallback((_product: Product) => {
-    // TODO: navigate to product detail screen
-  }, []);
-
-  const handleAddToList = useCallback((_product: Product) => {
-    // TODO: add to persistent shopping list
-  }, []);
 
   const renderFooter = () => {
     if (isLoading) {
@@ -80,20 +110,19 @@ export function SearchResultsScreen() {
 
   const renderEmpty = () => {
     if (isLoading) return null;
-    return <EmptySearchState query={query} />;
+    return <EmptySearchState query={searchTerm} />;
   };
 
   return (
     <View style={styles.container}>
       <ProductGrid
         products={products}
-        handlePress={handleProductPress}
-        handleAddToList={handleAddToList}
         onEndReached={() => fetchData()}
         onEndReachedThreshold={0.5}
         listFooterComponent={renderFooter()}
         listHeaderComponent={<SearchHeader />}
         listEmptyComponent={renderEmpty()}
+        listRef={listRef}
         contentContainerStyle={[
           styles.gridContainer,
           { paddingBottom: insets.bottom + 5 },

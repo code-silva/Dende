@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useMemo } from "react";
+import { type Ref, useCallback, useMemo } from "react";
 import {
   FlatList,
   type StyleProp,
@@ -13,13 +13,14 @@ import ProductCard from "./ProductCard";
 
 interface ProductGridProps {
   products: Product[];
-  handlePress: (product: Product) => void;
-  handleAddToList: (product: Product) => void;
+  handlePress?: (product: Product) => void;
+  handleAddToList?: (product: Product) => void;
   onEndReached?: () => void;
   onEndReachedThreshold?: number;
   listFooterComponent?: React.ReactElement | null;
   listHeaderComponent?: React.ReactElement | null;
   listEmptyComponent?: React.ReactElement | null;
+  listRef?: Ref<FlatList<Product>>;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
@@ -36,6 +37,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   listFooterComponent,
   listHeaderComponent,
   listEmptyComponent,
+  listRef,
   contentContainerStyle,
 }) => {
   const { width } = useWindowDimensions();
@@ -69,6 +71,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 
   return (
     <FlatList
+      ref={listRef}
       data={products}
       keyExtractor={(item, index) => `${item.id}-${index}`}
       renderItem={renderItem}
