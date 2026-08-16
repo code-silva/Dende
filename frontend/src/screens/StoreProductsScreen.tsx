@@ -62,14 +62,6 @@ export function StoreProductsScreen({ route }: StoreProductsScreenProps) {
     [fetchData],
   );
 
-  const handleProductPress = useCallback((_product: Product) => {
-    // TODO: navigate to product detail screen
-  }, []);
-
-  const handleAddToList = useCallback((_product: Product) => {
-    // TODO: add to persistent shopping list
-  }, []);
-
   const headerElement = (
     <View style={styles.headerContainer}>
       <MarketBanner
