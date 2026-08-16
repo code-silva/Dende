@@ -199,7 +199,7 @@ def scrap_home_page():
     """
 
     try:
-        urls = get_active_supermarkets()[:5]
+        urls = get_active_supermarkets()
         logger.info(
             f"Home Page analysis finished. Found {len(urls)} active links (limited for testing)."
         )

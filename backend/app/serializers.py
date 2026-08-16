@@ -32,7 +32,19 @@ class ProductOfferSerializer(serializers.ModelSerializer):
     marketName = serializers.ReadOnlyField(source="branch_supermarket.parent_supermarket.name")
     state = serializers.ReadOnlyField(source="branch_supermarket.state")
     city = serializers.ReadOnlyField(source="branch_supermarket.city")
-    address = serializers.ReadOnlyField(source="branch_supermarket.address")
+    address = serializers.SerializerMethodField()
+
+    def get_address(self, obj):
+        branch = obj.branch_supermarket
+        if not branch:
+            return ""
+
+        city = branch.city
+        if branch.neighborhood:
+            return f"{city} - {branch.neighborhood}"
+        if branch.street:
+            return f"{city} - {branch.street}"
+        return city
 
     class Meta:
         model = BranchProductOffer
@@ -98,7 +110,15 @@ class BranchSupermarketSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="parent_supermarket.name", read_only=True)
     state = serializers.CharField(read_only=True)
     city = serializers.CharField(read_only=True)
-    address = serializers.CharField(read_only=True)
+    address = serializers.SerializerMethodField()
+
+    def get_address(self, obj):
+        city = obj.city
+        if obj.neighborhood:
+            return f"{city} - {obj.neighborhood}"
+        if obj.street:
+            return f"{city} - {obj.street}"
+        return city
 
     distanceInKilometers = serializers.SerializerMethodField()
 
