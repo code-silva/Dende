@@ -46,3 +46,26 @@ def remove_accents(text: str) -> str:
         return ""
 
     return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def binary_search(array: list, target_value: Any) -> Any:
+  """
+  Searchs a value inside of an array, using the binary search algorithm, and returns
+  its index if found. If it is not found, it returns 'None'.
+  """
+
+  left = 0
+  right = len(array) - 1
+
+  while left <= right:
+    mid = (left + right) // 2
+
+    if array[mid] == target_value:
+      return mid
+
+    if array[mid] < target_value:
+      left = mid + 1
+    else:
+      right = mid - 1
+
+  return -1

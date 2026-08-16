@@ -2,7 +2,7 @@ import pytest
 from django.db import IntegrityError
 from model_bakery import baker
 
-from app.models import BranchSupermarket, Category, Offer, ParentSupermarket, Product
+from app.models import BranchSupermarket, Category, Offer, ParentSupermarket
 
 
 @pytest.mark.django_db
@@ -39,17 +39,6 @@ class TestProduct:
     """
     Class destined to the elaboration of tests of 'Product' model.
     """
-
-    def test_european_article_number_uniqueness(self):
-        """
-        Tests if the 'unique' constraint is applied to the 'european_article_number' attribute.
-        It should return an error if you try to create a product with the same
-        european_article_number as an existing one.
-        """
-
-        baker.make(Product, european_article_number="1010101")
-        with pytest.raises(IntegrityError):
-            baker.make(Product, european_article_number="1010101")
 
 
 @pytest.mark.django_db

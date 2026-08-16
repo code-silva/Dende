@@ -128,9 +128,9 @@ class TestHandleExtractionErrorBusinessRules:
     """MC/DC Tests for the Retry and Error Handling rules during AI extraction."""
 
     def test_retry_on_pydantic_validation_error(self, mock_task):
-        """Rule: Retries after 30s if AI outputs invalid JSON (Pydantic ValidationError)."""
+        """Rule: Abort task (raise ValueError) on Pydantic ValidationError."""
         error = ValidationError.from_exception_data(title="Test", line_errors=[])
-        with pytest.raises(Retry):
+        with pytest.raises(ValueError):
             _handle_extraction_error(mock_task, error, "/fake")
 
     def test_retry_on_json_decode_error(self, mock_task):

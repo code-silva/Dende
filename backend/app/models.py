@@ -33,11 +33,15 @@ class Product(models.Model):
         max_length=50, choices=MeasurementUnit.choices, default=MeasurementUnit.UN
     )
 
-    european_article_number = models.CharField(max_length=20, unique=True, blank=True, null=True)
-
     class Meta:
         verbose_name = "Produto"
         verbose_name_plural = "Produtos"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "category", "brand", "measurement", "measurement_unit"],
+                name="unique_product_constraint",
+            )
+        ]
 
     def __str__(self):
         return f"{self.name} {self.brand} - {self.measurement}{self.measurement_unit}"
@@ -133,7 +137,10 @@ class BranchSupermarket(models.Model):
         TO = "TO", "Tocantins"
 
     coordinates = gis_models.PointField(geography=True, srid=4326)
-    address = models.CharField(max_length=255, blank=False, default="")
+    zip_code = models.CharField(max_length=8, blank=True, null=True)
+    street = models.CharField(max_length=150, blank=True, null=True)
+    number = models.CharField(max_length=20, blank=True, null=True)
+    neighborhood = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=20, choices=State.choices, default="DF")
     city = models.CharField(max_length=50, blank=False, default="")
     parent_supermarket = models.ForeignKey(
@@ -152,6 +159,11 @@ class BranchSupermarket(models.Model):
 
     def __str__(self):
         return f"{self.parent_supermarket.name} - {self.city}"
+
+    def save(self, *args, **kwargs):
+        if self.zip_code:
+            self.zip_code = self.zip_code.replace("-", "").replace(".", "")
+        super().save(*args, **kwargs)
 
 
 class BranchProductOffer(models.Model):

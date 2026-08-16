@@ -51,7 +51,10 @@ def test_geocode_address_success(mock_get):
         "lng": -47.9,
         "city": "Brasília",
         "state": "DF",
-        "formatted_address": "Rua Exemplo, Brasília - DF",
+        "zip_code": None,
+        "street": None,
+        "number": None,
+        "neighborhood": None,
     }
 
 
