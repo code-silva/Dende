@@ -11,9 +11,11 @@ import {
   Dimensions,
   Keyboard,
   Platform,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -35,10 +37,10 @@ export interface SearchBarHandle {
 interface SearchBarProps {
   initialValue?: string;
   placeholder?: string;
-  onChangeText?: (text: string) => void;
   onSearch?: (text: string) => void;
   onDebouncedChange?: (text: string) => void;
   disableApiSearch?: boolean;
+  inputStyle?: StyleProp<TextStyle>;
 }
 
 export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
@@ -46,10 +48,10 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
     {
       initialValue = "",
       placeholder = "Busque por produtos...",
-      onChangeText,
       onSearch,
       onDebouncedChange,
       disableApiSearch = false,
+      inputStyle,
     },
     ref,
   ) {
@@ -82,13 +84,17 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
       if (!disableApiSearch) fetchHybridSearch(searchTerm);
     };
 
+    const handleSelectSuggestion = (suggestionText: string) => {
+      const trimmed = suggestionText.trim();
+      setTerm(trimmed);
+      setSuggestions([]);
+      setIsFocused(false);
+      handleSearchAction(trimmed);
+    };
+
     useEffect(() => {
       setTerm(initialValue);
     }, [initialValue]);
-
-    useEffect(() => {
-      onChangeText?.(term);
-    }, [term, onChangeText]);
 
     useEffect(() => {
       if (!onDebouncedChange) return;
@@ -127,11 +133,11 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           const data = await fetchHybridSearch(term);
 
           if (data.offers) {
-            const productNames = data.offers.map(
+            const productNames: string[] = data.offers.map(
               (item: Product) => item.productName,
             );
             const uniqueNames = Array.from(new Set(productNames));
-            setSuggestions(uniqueNames as string[]);
+            setSuggestions(uniqueNames.slice(0, 5));
           }
           setIsSearchPerformed(true);
         } catch (error) {
@@ -153,6 +159,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
               // @ts-expect-error
               styles.input,
               { fontSize: isUltraNarrow ? 13 : isSmall ? 14 : 16 },
+              inputStyle,
             ]}
             placeholder={placeholder}
             placeholderTextColor="#A0AAB2"
@@ -163,7 +170,9 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
             returnKeyType="search"
             onSubmitEditing={() => handleSearchAction(term)}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onBlur={() => {
+              setTimeout(() => setIsFocused(false), 200);
+            }}
           />
 
           <View style={styles.iconContainer}>
@@ -205,8 +214,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
                   key={item}
                   style={styles.suggestionItem}
                   onPress={() => {
-                    setTerm(item);
-                    setSuggestions([]);
+                    handleSelectSuggestion(item);
                   }}
                 >
                   <Feather
@@ -314,25 +322,25 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     position: "absolute",
-    top: 65,
+    top: 60,
     left: 0,
     right: 0,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 15,
-    elevation: 5,
+    elevation: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     borderWidth: 1,
     borderColor: "#E0E4E8",
-    zIndex: 2000,
+    zIndex: 9999,
     overflow: "hidden",
   },
   suggestionItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F2F5",

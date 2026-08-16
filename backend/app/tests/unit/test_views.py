@@ -2,11 +2,12 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.gis.geos import Point
+from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 from model_bakery import baker
 
-from app.models import BranchProductOffer, BranchSupermarket, ParentSupermarket
+from app.models import BranchProductOffer, BranchSupermarket, ParentSupermarket, Product
 
 
 @pytest.mark.django_db
@@ -465,6 +466,52 @@ class TestHybridSearchView:
         assert response.status_code == 200
         assert any("arroz" in offer["productName"].lower() for offer in results)
 
+    def test_search_orders_results_by_relevance(self, api_client, db):
+        """
+        Testing that matches on the product name are ranked above matches on
+        the brand, and that closer products appear first. Uses accent-free
+        data so the assertion is valid on SQLite (CI) and PostgreSQL.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        # matched by NAME (relevance tier 4) - exact, strongest match
+        name_match = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="feijao carioca especial", brand="X", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+        # matched only by BRAND (relevance tier 3)
+        brand_match = BranchProductOffer.objects.create(
+            product=baker.make(Product, name="arroz integral", brand="feijao", category=category),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+
+        response = api_client.get(self.URL, {"query": "feijao", "marketId": branch.id})
+
+        results = response.data["offers"]
+        ordered_names = [offer["productName"] for offer in results]
+
+        assert response.status_code == 200
+        # name hit must come before the brand-only hit
+        assert ordered_names.index(name_match.product.name) < ordered_names.index(
+            brand_match.product.name
+        )
+
 
 @pytest.mark.django_db
 class TestBranchProductOfferListView:
@@ -502,7 +549,7 @@ class TestBranchProductOfferListView:
     def test_with_supermarket_id_missing(self, api_client, offers_list):
         """
         Testing when everything (latitude, longitude) but the supermarket_identifier was informed.
-        It should return a list of offers ordered by the 'category' priority.
+        It should return all nearby offers, ordered by distance (feed without search term).
         """
 
         response = api_client.get(
@@ -514,11 +561,11 @@ class TestBranchProductOfferListView:
         )
 
         results = response.data["results"]
-        priority_map = {offer.id: offer.product.category.priority for offer in offers_list}
-        priorities = [priority_map[offer["id"]] for offer in results]
+        result_ids = {offer["id"] for offer in results}
+        expected_ids = {offer.id for offer in offers_list}
 
         assert response.status_code == 200
-        assert priorities == sorted(priorities)
+        assert result_ids == expected_ids
 
     @pytest.mark.parametrize("value", [" ", "", "invalidtype", 123131.13131313, True])
     def test_with_invalid_longitude(self, value, api_client, offers_list):
@@ -565,3 +612,367 @@ class TestBranchProductOfferListView:
         )
         results = response.data["results"]
         assert not results
+
+    def _create_market_with_products(self, names):
+        """Creates a market with one offer per product name and returns the branch."""
+        future_date = timezone.now().date() + timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        for name in names:
+            product = baker.make(Product, name=name, brand="Marca Teste", category=category)
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                product=product,
+                offer__expiration_date=future_date,
+            )
+        return branch
+
+    def test_search_within_market_filters_by_name(self, api_client, db):
+        """
+        Testing that the search term filters products of a specific market,
+        using the 'search' query parameter, case-insensitively.
+        """
+
+        branch = self._create_market_with_products(
+            ["Leite Integral", "Arroz Branco", "Feijão Carioca"]
+        )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "leite",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Leite Integral"]
+
+    def test_search_supports_query_alias(self, api_client, db):
+        """
+        Testing that the 'query' query parameter (used by the mobile app)
+        also filters products, keeping backwards compatibility.
+        """
+
+        branch = self._create_market_with_products(
+            ["Leite Integral", "Arroz Branco", "Feijão Carioca"]
+        )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "query": "ARROZ",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Arroz Branco"]
+
+    def test_search_without_match_returns_empty(self, api_client, db):
+        """
+        Testing that a search with no matches returns HTTP 200 and an empty list.
+        """
+
+        branch = self._create_market_with_products(["Leite Integral", "Arroz Branco"])
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "iteminexistente",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.data["results"] == []
+
+    def test_search_without_market_filters_by_distance(self, api_client, db):
+        """
+        Testing that the search term also applies when filtering by distance
+        (no marketId informed), returning only matching products nearby.
+        """
+
+        self._create_market_with_products(["Leite Integral", "Arroz Branco", "Feijão Carioca"])
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "search": "feijão",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Feijão Carioca"]
+
+    def test_search_matches_product_category(self, api_client, db):
+        """
+        Testing that the search term also matches the product category
+        (e.g. 'Laticínios'), returning the items of that category.
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        dairy = baker.make("app.Category", name="Laticínios", priority=1)
+        drinks = baker.make("app.Category", name="Bebidas", priority=2)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        for name, category in [("Leite", dairy), ("Suco de Laranja", drinks)]:
+            product = baker.make(Product, name=name, brand="Marca Teste", category=category)
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                product=product,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "latic",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Leite"]
+
+    @pytest.mark.skipif(
+        connection.vendor != "postgresql",
+        reason="PostgreSQL is needed to run this test.",
+    )
+    def test_search_ignores_accents_and_tolerates_typos(self, api_client, db):
+        """
+        Testing that the PostgreSQL branch tolerates searches without accents
+        ('feijao' -> 'Feijão') and small typos ('fijao' -> 'Feijão').
+        """
+
+        branch = self._create_market_with_products(["Feijão Carioca", "Leite Integral"])
+
+        for query, expected in [("feijao", "Feijão Carioca"), ("fijao", "Feijão Carioca")]:
+            response = api_client.get(
+                self.URL,
+                {
+                    "latitude": -15.7801,
+                    "longitude": -47.9292,
+                    "marketId": branch.id,
+                    "search": query,
+                },
+            )
+
+            names = [result["productName"] for result in response.data["results"]]
+
+            assert response.status_code == 200
+            assert expected in names
+
+    @pytest.mark.skipif(
+        connection.vendor != "postgresql",
+        reason="PostgreSQL is needed to run this test.",
+    )
+    def test_search_does_not_match_weak_category_similarity(self, api_client, db):
+        """
+        Testing that a search term does not return products whose match comes
+        only from a weak trigram similarity on the category name (e.g. 'carne'
+        vs the category 'Café/Açúcar', whose similarity is exactly 0.2).
+        """
+
+        future_date = timezone.now().date() + timedelta(days=1)
+        meats = baker.make("app.Category", name="Carnes", priority=1)
+        sugar = baker.make("app.Category", name="Café/Açúcar", priority=2)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        for name, category in [("Picanha", meats), ("Açúcar Refinado", sugar)]:
+            product = baker.make(Product, name=name, brand="Marca Teste", category=category)
+            baker.make(
+                BranchProductOffer,
+                branch_supermarket=branch,
+                product=product,
+                offer__expiration_date=future_date,
+            )
+
+        response = api_client.get(
+            self.URL,
+            {
+                "latitude": -15.7801,
+                "longitude": -47.9292,
+                "marketId": branch.id,
+                "search": "carne",
+            },
+        )
+
+        results = response.data["results"]
+
+        assert response.status_code == 200
+        assert [result["productName"] for result in results] == ["Picanha"]
+
+
+@pytest.mark.django_db
+class TestValidOffersScope:
+    """
+    Class destined to the elaboration of tests of the 'valid' manager scope
+    and its enforcement across all API endpoints.
+    """
+
+    def _create_branch_with_valid_and_expired_offers(self):
+        """Creates a branch with one valid and one expired offer."""
+        future_date = timezone.now().date() + timedelta(days=7)
+        past_date = timezone.now().date() - timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        parent = baker.make(ParentSupermarket, name="Comper")
+        branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=Point(-47.9292, -15.7801, srid=4326),
+        )
+        valid_offer = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="Leite Integral", brand="Marca Teste", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=future_date),
+        )
+        expired_offer = BranchProductOffer.objects.create(
+            product=baker.make(
+                Product, name="Leite Desnatado", brand="Marca Teste", category=category
+            ),
+            branch_supermarket=branch,
+            price="10.00",
+            offer=baker.make("app.Offer", expiration_date=past_date),
+        )
+        return valid_offer, expired_offer
+
+    def test_manager_valid_filters_expired_offers(self):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        valid_ids = list(BranchProductOffer.objects.valid().values_list("id", flat=True))
+
+        assert valid_offer.id in valid_ids
+        assert expired_offer.id not in valid_ids
+
+    def test_search_view_excludes_expired_offers(self, api_client):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        response = api_client.get(reverse("search"), {"query": "leite"})
+
+        assert response.status_code == 200
+        names = [offer["productName"] for offer in response.data["offers"]]
+        assert valid_offer.product.name in names
+        assert expired_offer.product.name not in names
+
+    def test_offers_list_view_excludes_expired_offers(self, api_client):
+        valid_offer, expired_offer = self._create_branch_with_valid_and_expired_offers()
+
+        response = api_client.get(reverse("offers_list"))
+
+        assert response.status_code == 200
+        names = [offer["productName"] for offer in response.data["results"]]
+        assert valid_offer.product.name in names
+        assert expired_offer.product.name not in names
+
+    def _create_active_and_expired_markets(self):
+        """Creates one market with a valid offer and another with only expired offers."""
+        future_date = timezone.now().date() + timedelta(days=7)
+        past_date = timezone.now().date() - timedelta(days=1)
+        category = baker.make("app.Category", priority=1)
+        coordinates = Point(-47.9292, -15.7801, srid=4326)
+
+        active_parent = baker.make(ParentSupermarket, name="Active Market")
+        active_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=active_parent,
+            state="DF",
+            city="Gama",
+            address="Gama Sul, QI 01",
+            coordinates=coordinates,
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=active_branch,
+            product__name="Leite Integral",
+            product__category=category,
+            price="10.00",
+            offer__expiration_date=future_date,
+        )
+
+        expired_parent = baker.make(ParentSupermarket, name="Expired Market")
+        expired_branch = baker.make(
+            BranchSupermarket,
+            parent_supermarket=expired_parent,
+            state="DF",
+            city="Taguatinga",
+            address="QNM 01",
+            coordinates=coordinates,
+        )
+        baker.make(
+            BranchProductOffer,
+            branch_supermarket=expired_branch,
+            product__name="Leite Desnatado",
+            product__category=category,
+            price="10.00",
+            offer__expiration_date=past_date,
+        )
+
+        return active_parent.name, expired_parent.name
+
+    def test_nearby_markets_view_excludes_markets_with_only_expired_offers(self, api_client):
+        active_market, expired_market = self._create_active_and_expired_markets()
+
+        response = api_client.get(reverse("nearby_markets"))
+
+        assert response.status_code == 200
+        market_names = [market["name"] for market in response.data["results"]]
+        assert active_market in market_names
+        assert expired_market not in market_names
+
+    def test_cities_view_excludes_cities_with_only_expired_offers(self, api_client):
+        self._create_active_and_expired_markets()
+
+        response = api_client.get(reverse("cities_list"))
+
+        assert response.status_code == 200
+        assert "Gama" in response.data
+        assert "Taguatinga" not in response.data

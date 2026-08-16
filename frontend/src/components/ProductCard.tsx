@@ -13,8 +13,8 @@ import type { Product } from "../types/product";
 interface ProductCardProps {
   product: Product;
   ranking?: number;
-  handlePress: (product: Product) => void;
-  handleAddToList: (product: Product) => void;
+  handlePress?: (product: Product) => void;
+  handleAddToList?: (product: Product) => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -40,7 +40,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   return (
     <TouchableOpacity
       style={[styles.card, { padding: isSmallDevice ? 8 : 12 }]}
-      onPress={() => handlePress(product)}
+      onPress={handlePress ? () => handlePress(product) : undefined}
       activeOpacity={0.9}
     >
       <View style={styles.imageContainer}>
@@ -62,23 +62,25 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            {
-              width: isSmallDevice ? 26 : 30,
-              height: isSmallDevice ? 26 : 30,
-              borderRadius: isSmallDevice ? 13 : 15,
-            },
-          ]}
-          onPress={() => handleAddToList(product)}
-        >
-          <MaterialCommunityIcons
-            name="playlist-plus"
-            size={isSmallDevice ? 16 : 18}
-            color="#28a8b5"
-          />
-        </TouchableOpacity>
+        {handleAddToList && (
+          <TouchableOpacity
+            style={[
+              styles.addButton,
+              {
+                width: isSmallDevice ? 26 : 30,
+                height: isSmallDevice ? 26 : 30,
+                borderRadius: isSmallDevice ? 13 : 15,
+              },
+            ]}
+            onPress={() => handleAddToList(product)}
+          >
+            <MaterialCommunityIcons
+              name="playlist-plus"
+              size={isSmallDevice ? 16 : 18}
+              color="#28a8b5"
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.infoContainer}>
@@ -128,18 +130,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 10,
     elevation: 4,
-  },
-  listStyle: {
-    width: "100%",
-    maxWidth: 450,
-    alignSelf: "center",
-    marginVertical: 12,
-  },
-  gridStyle: {
-    flex: 1,
-    margin: 8,
-    padding: 8,
-    minHeight: 280,
   },
   imageContainer: {
     width: "100%",
@@ -235,26 +225,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#888",
     textTransform: "uppercase",
-  },
-  brandWrapper: {
-    flex: 1,
-  },
-  footerLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  weightLabel: {
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  weightText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#666",
   },
   distanceWrapper: {
     alignItems: "flex-end",

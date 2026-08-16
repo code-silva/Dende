@@ -1,11 +1,8 @@
-import {
-  type NavigationProp,
-  type ParamListBase,
-  useNavigation,
-} from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type * as Location from "expo-location";
 import { memo, useCallback, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Keyboard, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchMarkets } from "../api/markets";
 import { EmptyProductState } from "../components/EmptyProductState";
@@ -14,6 +11,7 @@ import { LoadingFooter } from "../components/LoadingFooter";
 import { ProductGrid } from "../components/ProductGrid";
 import { useProductsFetch } from "../hooks/useProductsFetch";
 import type { Market } from "../types/market";
+import type { HomeStackParamList } from "../types/navigation";
 import type { Product } from "../types/product";
 
 // SUPPORT FUNCTIONS
@@ -25,7 +23,10 @@ export const HomeScreen = memo(function HomeScreen({
 }) {
   const insets = useSafeAreaInsets();
   const [markets, setMarkets] = useState<Market[]>([]);
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation =
+    useNavigation<
+      NativeStackNavigationProp<HomeStackParamList, "HomeScreen">
+    >();
   const { products, isLoading, hasMoreData, fetchData } = useProductsFetch({
     latitude: location?.coords.latitude,
     longitude: location?.coords.longitude,
@@ -47,6 +48,22 @@ export const HomeScreen = memo(function HomeScreen({
           id: market.id,
           name: market.name,
         },
+        latitude: location?.coords.latitude,
+        longitude: location?.coords.longitude,
+      });
+    },
+    [location, navigation],
+  );
+
+  // NAVIGATION TO GLOBAL SEARCH RESULTS
+  const handleSearchSubmit = useCallback(
+    (term: string) => {
+      const trimmedQuery = term.trim();
+      if (!trimmedQuery) return;
+
+      Keyboard.dismiss();
+      navigation.navigate("SearchResultsScreen", {
+        query: trimmedQuery,
         latitude: location?.coords.latitude,
         longitude: location?.coords.longitude,
       });
@@ -103,11 +120,15 @@ export const HomeScreen = memo(function HomeScreen({
         products={products}
         handlePress={handlePress}
         handleAddToList={handleAdd}
-        onEndReached={fetchData}
+        onEndReached={() => fetchData()}
         onEndReachedThreshold={0.7}
         listFooterComponent={renderFooter()}
         listHeaderComponent={
-          <HomeHeader markets={markets} handleMarketPress={handleMarketPress} />
+          <HomeHeader
+            markets={markets}
+            handleMarketPress={handleMarketPress}
+            onSearch={handleSearchSubmit}
+          />
         }
         contentContainerStyle={[
           styles.gridContainer,

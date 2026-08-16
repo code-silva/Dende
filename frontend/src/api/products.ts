@@ -10,8 +10,10 @@ export async function fetchProducts(
 ) {
   const url = new URL(`${BASE_URL}/products/offers/`);
   url.searchParams.append("page", String(page));
-  url.searchParams.append("latitude", String(latitude));
-  url.searchParams.append("longitude", String(longitude));
+  if (latitude !== undefined && latitude !== 0)
+    url.searchParams.append("latitude", String(latitude));
+  if (longitude !== undefined && longitude !== 0)
+    url.searchParams.append("longitude", String(longitude));
 
   if (query) url.searchParams.append("query", query);
   if (marketId) url.searchParams.append("marketId", String(marketId));

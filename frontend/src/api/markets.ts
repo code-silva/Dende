@@ -13,8 +13,10 @@ export async function fetchMarkets(
   signal?: AbortSignal,
 ): Promise<Market[]> {
   const url = new URL(`${BASE_URL}/nearby-markets/`);
-  url.searchParams.append("latitude", String(latitude));
-  url.searchParams.append("longitude", String(longitude));
+  if (latitude !== undefined && latitude !== 0)
+    url.searchParams.append("latitude", String(latitude));
+  if (longitude !== undefined && longitude !== 0)
+    url.searchParams.append("longitude", String(longitude));
   url.searchParams.append("radiusInKm", String(radiusInKm));
   if (address) url.searchParams.append("address", address);
   if (city) url.searchParams.append("city", city);
