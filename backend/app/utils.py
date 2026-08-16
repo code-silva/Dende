@@ -48,6 +48,31 @@ def remove_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
 
 
+def normalize_string_casing(text: str) -> str:
+    """
+    Normalizes string casing by applying title case but keeping Portuguese prepositions lowercase.
+    """
+
+    if not text:
+        return text
+
+    prepositions = {
+       "de", "da", "do",
+       "das", "dos", "e",
+       "em", "na", "no",
+       "nas", "nos", "com"
+    }
+
+    words = text.strip().lower().split()
+    if not words:
+        return ""
+    normalized = [words[0].capitalize()]
+    for word in words[1:]:
+        normalized.append(word if word in prepositions else word.capitalize())
+    return " ".join(normalized)
+
+
+
 def binary_search(array: list, target_value: Any) -> Any:
   """
   Searchs a value inside of an array, using the binary search algorithm, and returns

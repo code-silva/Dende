@@ -18,7 +18,7 @@ from ..models import (
     ParentSupermarket,
     Product,
 )
-from ..utils import validate_extracted_flyer_json
+from ..utils import normalize_string_casing, validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
 
@@ -240,8 +240,9 @@ def save_extracted_data_to_db(data: dict, url: str):
                 url=url, defaults={"expiration_date": data["expiration_date"]}
             )
 
+            parent_supermarket_name = normalize_string_casing(data["supermarket"])
             parent_supermarket, _ = ParentSupermarket.objects.get_or_create(
-                name=data["supermarket"]
+                name=parent_supermarket_name
             )
 
             extracted_branch_instances = []
@@ -282,9 +283,11 @@ def save_extracted_data_to_db(data: dict, url: str):
                     )
                     continue
 
+                product_name = normalize_string_casing(item["name"])
+                product_brand = normalize_string_casing(item["brand"])
                 product, _ = Product.objects.get_or_create(
-                    name=item["name"],
-                    brand=item["brand"],
+                    name=product_name,
+                    brand=product_brand,
                     measurement=item["measurement"],
                     measurement_unit=item["measurement_unit"].upper(),
                     category=category,

@@ -1,6 +1,8 @@
 from django.contrib.gis.db import models as gis_models
 from django.db import models
 
+from .utils import normalize_string_casing
+
 
 class Category(models.Model):
     """Class representing the 'Category' entity in the database."""
@@ -11,6 +13,12 @@ class Category(models.Model):
     class Meta:
         verbose_name = "Categoria"
         verbose_name_plural = "Categorias"
+
+    def save(self, *args, **kwargs):
+        from .utils import normalize_string_casing
+
+        self.name = normalize_string_casing(self.name)
+        super().save(*args, **kwargs)
 
 
 class Product(models.Model):
@@ -46,6 +54,11 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name} {self.brand} - {self.measurement}{self.measurement_unit}"
 
+    def save(self, *args, **kwargs):
+        self.name = normalize_string_casing(self.name)
+        self.brand = normalize_string_casing(self.brand)
+        super().save(*args, **kwargs)
+
 
 class ParentSupermarket(models.Model):
     """Class representing the 'ParentSupermarket' entity in the database."""
@@ -58,6 +71,10 @@ class ParentSupermarket(models.Model):
 
     def __str__(self):
         return f"{self.name}"
+
+    def save(self, *args, **kwargs):
+        self.name = normalize_string_casing(self.name)
+        super().save(*args, **kwargs)
 
 
 class Offer(models.Model):

@@ -33,6 +33,11 @@ class TestCategory:
         with pytest.raises(IntegrityError):
             baker.make(Category, priority=1)
 
+    def test_string_casing_normalization(self):
+        """Tests if the Category name is correctly normalized upon save."""
+        category = baker.make(Category, name=" PRODUTOS  de   limpeza ")
+        assert category.name == "Produtos de Limpeza"
+
 
 @pytest.mark.django_db
 class TestProduct:
@@ -40,6 +45,13 @@ class TestProduct:
     Class destined to the elaboration of tests of 'Product' model.
     """
 
+    def test_string_casing_normalization(self):
+        """Tests if the Product name and brand are correctly normalized upon save."""
+        from app.models import Product
+
+        product = baker.make(Product, name="arroz branco tipo 1", brand="TIO JOÃO")
+        assert product.name == "Arroz Branco Tipo 1"
+        assert product.brand == "Tio João"
 
 @pytest.mark.django_db
 class TestParentSupermarket:
@@ -57,6 +69,14 @@ class TestParentSupermarket:
         baker.make(ParentSupermarket, name="Dia a Dia")
         with pytest.raises(IntegrityError):
             baker.make(ParentSupermarket, name="Dia a Dia")
+
+    def test_string_casing_normalization(self):
+        """Tests if the ParentSupermarket name is correctly normalized upon save."""
+        market1 = baker.make(ParentSupermarket, name="ULTRABOX")
+        assert market1.name == "Ultrabox"
+
+        market2 = baker.make(ParentSupermarket, name="  pão  de   açúcar  ")
+        assert market2.name == "Pão de Açúcar"
 
 
 @pytest.mark.django_db
