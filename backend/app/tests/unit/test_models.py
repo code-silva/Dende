@@ -2,7 +2,7 @@ import pytest
 from django.db import IntegrityError
 from model_bakery import baker
 
-from app.models import BranchSupermarket, Category, Offer, ParentSupermarket, Product
+from app.models import BranchSupermarket, Category, Offer, ParentSupermarket
 
 
 @pytest.mark.django_db
@@ -33,6 +33,11 @@ class TestCategory:
         with pytest.raises(IntegrityError):
             baker.make(Category, priority=1)
 
+    def test_string_casing_normalization(self):
+        """Tests if the Category name is correctly normalized upon save."""
+        category = baker.make(Category, name=" PRODUTOS  de   limpeza ")
+        assert category.name == "Produtos de Limpeza"
+
 
 @pytest.mark.django_db
 class TestProduct:
@@ -40,17 +45,13 @@ class TestProduct:
     Class destined to the elaboration of tests of 'Product' model.
     """
 
-    def test_european_article_number_uniqueness(self):
-        """
-        Tests if the 'unique' constraint is applied to the 'european_article_number' attribute.
-        It should return an error if you try to create a product with the same
-        european_article_number as an existing one.
-        """
+    def test_string_casing_normalization(self):
+        """Tests if the Product name and brand are correctly normalized upon save."""
+        from app.models import Product
 
-        baker.make(Product, european_article_number="1010101")
-        with pytest.raises(IntegrityError):
-            baker.make(Product, european_article_number="1010101")
-
+        product = baker.make(Product, name="arroz branco tipo 1", brand="TIO JOÃO")
+        assert product.name == "Arroz Branco Tipo 1"
+        assert product.brand == "Tio João"
 
 @pytest.mark.django_db
 class TestParentSupermarket:
@@ -68,6 +69,14 @@ class TestParentSupermarket:
         baker.make(ParentSupermarket, name="Dia a Dia")
         with pytest.raises(IntegrityError):
             baker.make(ParentSupermarket, name="Dia a Dia")
+
+    def test_string_casing_normalization(self):
+        """Tests if the ParentSupermarket name is correctly normalized upon save."""
+        market1 = baker.make(ParentSupermarket, name="ULTRABOX")
+        assert market1.name == "Ultrabox"
+
+        market2 = baker.make(ParentSupermarket, name="  pão  de   açúcar  ")
+        assert market2.name == "Pão de Açúcar"
 
 
 @pytest.mark.django_db

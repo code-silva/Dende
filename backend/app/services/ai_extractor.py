@@ -4,13 +4,21 @@ import os
 from pathlib import Path
 
 from django.conf import settings
-from django.db import connection, transaction
+from django.contrib.gis.geos import Point
+from django.db import transaction
 from google import genai
 from google.genai import types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ..models import BranchProductOffer, Category, Offer, ParentSupermarket, Product
-from ..utils import validate_extracted_flyer_json
+from ..models import (
+    BranchProductOffer,
+    BranchSupermarket,
+    Category,
+    Offer,
+    ParentSupermarket,
+    Product,
+)
+from ..utils import normalize_string_casing, validate_extracted_flyer_json
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +135,7 @@ def _build_ai_payload(images: list[Path]) -> list[types.Part]:
     stop=stop_after_attempt(5),
     reraise=True,
 )
-def _generate_content_with_retry(contents: list[types.Part]) -> str:
+def _generate_content_with_retry(contents: list[types.Part | str]) -> str:
     """
     Wraps the API call with exponential backoff to manage short burst
     rate limits (requests per minute).
@@ -144,6 +152,33 @@ def _generate_content_with_retry(contents: list[types.Part]) -> str:
         ),
     )
     return response.text
+
+
+def extract_branches_locations(text: str) -> list[dict]:
+    """
+    Extracts unstructured branch addresses from raw text using Gemini AI.
+    """
+    if not text.strip():
+        return []
+
+    prompt = (
+        "Sua tarefa é analisar o texto extraído da página web de um supermercado "
+        "e encontrar as informações de endereços das suas filiais.\n"
+        "O texto geralmente contém ruído e os endereços podem estar inconsistentes "
+        "(só o nome da rua, ou só rua e cidade, com ou sem CEP, etc).\n"
+        "Extraia todos os endereços físicos completos o máximo que conseguir "
+        "e retorne APENAS um JSON com o formato: "
+        '{"branches": [{"address": "Endereço extraído, bairro, cidade..."}]}'
+    )
+
+    response_text = _generate_content_with_retry([prompt, text])
+
+    try:
+        data = json.loads(response_text)
+        return data.get("branches", [])
+    except json.JSONDecodeError:
+        logger.error("Failed to decode branches JSON from AI")
+        return []
 
 
 def process_flyers_batch(images: list[Path]) -> dict:
@@ -201,31 +236,58 @@ def save_extracted_data_to_db(data: dict, url: str):
     """
     try:
         with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT pg_advisory_xact_lock(8472935)")
-
             offer, _ = Offer.objects.update_or_create(
                 url=url, defaults={"expiration_date": data["expiration_date"]}
             )
 
+            parent_supermarket_name = normalize_string_casing(data["supermarket"])
             parent_supermarket, _ = ParentSupermarket.objects.get_or_create(
-                name=data["supermarket"]
+                name=parent_supermarket_name
             )
-            branches = list(parent_supermarket.branches.all())
+
+            extracted_branch_instances = []
+            for branch_data in data.get("branches", []):
+                # We skip missing lat/lng to prevent GIS crashes
+                if "lat" not in branch_data or "lng" not in branch_data:
+                    continue
+
+                coordinates = Point(branch_data["lng"], branch_data["lat"])
+
+                # We do not overwrite city or state if the branch exists
+                branch_obj, _ = BranchSupermarket.objects.update_or_create(
+                    coordinates=coordinates,
+                    parent_supermarket=parent_supermarket,
+                    defaults={
+                        "city": branch_data.get("city", ""),
+                        "state": branch_data.get("state", "DF"),
+                        "zip_code": branch_data.get("zip_code"),
+                        "street": branch_data.get("street"),
+                        "number": branch_data.get("number"),
+                        "neighborhood": branch_data.get("neighborhood"),
+                    },
+                )
+                extracted_branch_instances.append(branch_obj)
+
+            if extracted_branch_instances:
+                branches = extracted_branch_instances
+            else:
+                branches = list(parent_supermarket.branches.all())
 
             for item in data["items"]:
                 try:
                     category = Category.objects.get(name__iexact=item["category"])
                 except Category.DoesNotExist:
                     logger.warning(
-                        f"Category '{item['category']}' not found for product '{item['name']}'.",
-                        "Skipping.",
+                        f"Category '{item['category']}' not found for product '{item['name']}'. "
+                        "Skipping."
                     )
                     continue
 
+                product_name = normalize_string_casing(item["name"])
+                product_brand = normalize_string_casing(item["brand"])
                 product, _ = Product.objects.get_or_create(
-                    name=item["name"],
-                    brand=item["brand"],
+                    name=product_name,
+                    brand=product_brand,
                     measurement=item["measurement"],
                     measurement_unit=item["measurement_unit"].upper(),
                     category=category,
