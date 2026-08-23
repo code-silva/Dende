@@ -53,6 +53,7 @@ class TestProduct:
         assert product.name == "Arroz Branco Tipo 1"
         assert product.brand == "Tio João"
 
+
 @pytest.mark.django_db
 class TestParentSupermarket:
     """
