@@ -3,6 +3,8 @@ from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.utils import timezone
 
+from .utils import normalize_string_casing
+
 
 class Category(models.Model):
     """Class representing the 'Category' entity in the database."""
@@ -13,6 +15,12 @@ class Category(models.Model):
     class Meta:
         verbose_name = "Categoria"
         verbose_name_plural = "Categorias"
+
+    def save(self, *args, **kwargs):
+        from .utils import normalize_string_casing
+
+        self.name = normalize_string_casing(self.name)
+        super().save(*args, **kwargs)
 
 
 class Product(models.Model):
@@ -25,9 +33,9 @@ class Product(models.Model):
         ML = "ML", "ML"
         UN = "UN", "UN"
 
-    name = models.CharField(max_length=50, blank=False)
+    name = models.CharField(max_length=100, blank=False)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
-    brand = models.CharField(max_length=50, blank=False)
+    brand = models.CharField(max_length=100, blank=False)
     measurement = models.DecimalField(max_digits=10, decimal_places=2)
     image = models.ImageField(upload_to="products/")
 
@@ -35,11 +43,15 @@ class Product(models.Model):
         max_length=50, choices=MeasurementUnit.choices, default=MeasurementUnit.UN
     )
 
-    european_article_number = models.CharField(max_length=20, unique=True, blank=True, null=True)
-
     class Meta:
         verbose_name = "Produto"
         verbose_name_plural = "Produtos"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "category", "brand", "measurement", "measurement_unit"],
+                name="unique_product_constraint",
+            )
+        ]
         indexes = [
             GinIndex(
                 fields=["name"],
@@ -56,6 +68,11 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name} {self.brand} - {self.measurement}{self.measurement_unit}"
 
+    def save(self, *args, **kwargs):
+        self.name = normalize_string_casing(self.name)
+        self.brand = normalize_string_casing(self.brand)
+        super().save(*args, **kwargs)
+
 
 class ParentSupermarket(models.Model):
     """Class representing the 'ParentSupermarket' entity in the database."""
@@ -68,6 +85,10 @@ class ParentSupermarket(models.Model):
 
     def __str__(self):
         return f"{self.name}"
+
+    def save(self, *args, **kwargs):
+        self.name = normalize_string_casing(self.name)
+        super().save(*args, **kwargs)
 
 
 class Offer(models.Model):
@@ -147,7 +168,10 @@ class BranchSupermarket(models.Model):
         TO = "TO", "Tocantins"
 
     coordinates = gis_models.PointField(geography=True, srid=4326)
-    address = models.CharField(max_length=255, blank=False, default="")
+    zip_code = models.CharField(max_length=8, blank=True, null=True)
+    street = models.CharField(max_length=150, blank=True, null=True)
+    number = models.CharField(max_length=20, blank=True, null=True)
+    neighborhood = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=20, choices=State.choices, default="DF")
     city = models.CharField(max_length=50, blank=False, default="")
     parent_supermarket = models.ForeignKey(
@@ -166,6 +190,11 @@ class BranchSupermarket(models.Model):
 
     def __str__(self):
         return f"{self.parent_supermarket.name} - {self.city}"
+
+    def save(self, *args, **kwargs):
+        if self.zip_code:
+            self.zip_code = self.zip_code.replace("-", "").replace(".", "")
+        super().save(*args, **kwargs)
 
 
 class BranchProductOfferQuerySet(models.QuerySet):
@@ -202,6 +231,12 @@ class BranchProductOffer(models.Model):
     class Meta:
         verbose_name = "Produto Ofertado"
         verbose_name_plural = "Produtos Ofertados"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "branch_supermarket", "offer"],
+                name="unique_product_branch_offer",
+            )
+        ]
 
     def __str__(self):
         return f"{self.product.name} at {self.branch_supermarket}: $ {self.price}"

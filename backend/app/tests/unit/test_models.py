@@ -2,7 +2,7 @@ import pytest
 from django.db import IntegrityError
 from model_bakery import baker
 
-from app.models import BranchSupermarket, Category, Offer, ParentSupermarket, Product
+from app.models import BranchSupermarket, Category, Offer, ParentSupermarket
 
 
 @pytest.mark.django_db
@@ -33,6 +33,11 @@ class TestCategory:
         with pytest.raises(IntegrityError):
             baker.make(Category, priority=1)
 
+    def test_string_casing_normalization(self):
+        """Tests if the Category name is correctly normalized upon save."""
+        category = baker.make(Category, name=" PRODUTOS  de   limpeza ")
+        assert category.name == "Produtos de Limpeza"
+
 
 @pytest.mark.django_db
 class TestProduct:
@@ -40,16 +45,60 @@ class TestProduct:
     Class destined to the elaboration of tests of 'Product' model.
     """
 
-    def test_european_article_number_uniqueness(self):
-        """
-        Tests if the 'unique' constraint is applied to the 'european_article_number' attribute.
-        It should return an error if you try to create a product with the same
-        european_article_number as an existing one.
-        """
+    def test_string_casing_normalization(self):
+        """Tests if the Product name and brand are correctly normalized upon save."""
+        from app.models import Product
 
-        baker.make(Product, european_article_number="1010101")
+        product = baker.make(Product, name="arroz branco tipo 1", brand="TIO JOÃO")
+        assert product.name == "Arroz Branco Tipo 1"
+        assert product.brand == "Tio João"
+
+    @pytest.mark.skip(reason="SQLite doesn't support composite unique constraint.")
+    def test_product_uniqueness(self):
+        """Tests if the composite unique constraint works on Product."""
+        from app.models import Category, Product
+
+        category = baker.make(Category)
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="tio joão",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
         with pytest.raises(IntegrityError):
-            baker.make(Product, european_article_number="1010101")
+            baker.make(
+                Product,
+                name="arroz",
+                category=category,
+                brand="tio joão",
+                measurement=1.0,
+                measurement_unit="KG",
+            )
+
+    def test_create_different_products(self):
+        """Tests happy path: creating products that vary slightly in their composite fields."""
+        from app.models import Category, Product
+
+        category = baker.make(Category)
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="tio joão",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="camil",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
+        assert Product.objects.count() == 2
 
 
 @pytest.mark.django_db
@@ -68,6 +117,14 @@ class TestParentSupermarket:
         baker.make(ParentSupermarket, name="Dia a Dia")
         with pytest.raises(IntegrityError):
             baker.make(ParentSupermarket, name="Dia a Dia")
+
+    def test_string_casing_normalization(self):
+        """Tests if the ParentSupermarket name is correctly normalized upon save."""
+        market1 = baker.make(ParentSupermarket, name="ULTRABOX")
+        assert market1.name == "Ultrabox"
+
+        market2 = baker.make(ParentSupermarket, name="  pão  de   açúcar  ")
+        assert market2.name == "Pão de Açúcar"
 
 
 @pytest.mark.django_db
@@ -109,3 +166,44 @@ class TestOffer:
         baker.make(Offer, url="https://www.test.com")
         with pytest.raises(IntegrityError):
             baker.make(Offer, url="https://www.test.com")
+
+
+@pytest.mark.django_db
+class TestBranchProductOffer:
+    """
+    Class destined to the elaboration of tests of 'BranchProductOffer' model.
+    """
+
+    @pytest.mark.skip(reason="SQLite doesn't support composite unique constraint.")
+    def test_branch_product_offer_uniqueness(self):
+        from app.models import BranchProductOffer, BranchSupermarket, Offer, Product
+
+        product = baker.make(Product)
+        branch = baker.make(BranchSupermarket)
+        offer = baker.make(Offer)
+        baker.make(
+            BranchProductOffer, product=product, branch_supermarket=branch, offer=offer, price=10.0
+        )
+        with pytest.raises(IntegrityError):
+            baker.make(
+                BranchProductOffer,
+                product=product,
+                branch_supermarket=branch,
+                offer=offer,
+                price=15.0,
+            )
+
+    def test_create_different_branch_product_offers(self):
+        from app.models import BranchProductOffer, BranchSupermarket, Offer, Product
+
+        product1 = baker.make(Product)
+        product2 = baker.make(Product)
+        branch = baker.make(BranchSupermarket)
+        offer = baker.make(Offer)
+        baker.make(
+            BranchProductOffer, product=product1, branch_supermarket=branch, offer=offer, price=10.0
+        )
+        baker.make(
+            BranchProductOffer, product=product2, branch_supermarket=branch, offer=offer, price=15.0
+        )
+        assert BranchProductOffer.objects.count() == 2

@@ -42,7 +42,6 @@ def branch_supermarket(db, parent_supermarket):
         parent_supermarket=parent_supermarket,
         state="DF",
         city="Gama",
-        address="Gama Sul, QI 01",
         coordinates=Point(-47.9292, -15.7801),
     )
 
@@ -66,7 +65,6 @@ def supermarkets_list(db):
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul",
         )
         baker.make(
             BranchProductOffer, branch_supermarket=branch, offer__expiration_date=future_date
@@ -100,7 +98,6 @@ def offers_list(db, parent_supermarket):
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",
-            branch_supermarket__address="Gama Sul, QI 01",
             branch_supermarket__coordinates=Point(-47.9292, -15.7801, srid=4326),
         ),
         baker.make(
@@ -111,7 +108,6 @@ def offers_list(db, parent_supermarket):
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",
-            branch_supermarket__address="Gama Sul, QI 01",
             branch_supermarket__coordinates=Point(-47.9292, -15.7801, srid=4326),
         ),
         baker.make(
@@ -122,7 +118,6 @@ def offers_list(db, parent_supermarket):
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",
-            branch_supermarket__address="Gama Sul, QI 01",
             branch_supermarket__coordinates=Point(-47.9292, -15.7801, srid=4326),
         ),
     ]
@@ -140,7 +135,6 @@ def branch_with_active_offers(db):
         parent_supermarket=parent,
         state="DF",
         city="Gama",
-        address="Gama Sul, QI 02",
         coordinates=Point(-47.9292, -15.7801),
     )
     future_date = timezone.now().date() + timedelta(days=5)
@@ -162,7 +156,6 @@ def branch_with_expired_offers(db):
         parent_supermarket=parent,
         state="DF",
         city="Gama",
-        address="Gama Sul, QI 03",
         coordinates=Point(-47.9292, -15.7801),
     )
     past_date = timezone.now().date() - timedelta(days=1)
@@ -184,7 +177,6 @@ def branch_with_mixed_offers(db):
         parent_supermarket=parent,
         state="DF",
         city="Gama",
-        address="Gama Sul, QI 04",
         coordinates=Point(-47.9292, -15.7801),
     )
     future_date = timezone.now().date() + timedelta(days=5)

@@ -137,7 +137,6 @@ class TestBranchSupermarketListView:
                 parent_supermarket=parent,
                 state="DF",
                 city="Gama",
-                address=f"{name}, QI 01",
                 coordinates=Point(longitude, latitude, srid=4326),
             )
             baker.make(
@@ -171,7 +170,6 @@ class TestBranchSupermarketListView:
                 parent_supermarket=parent,
                 state="DF",
                 city=city,
-                address=f"{name}, QI 01",
                 coordinates=Point(-47.9292, -15.7801, srid=4326),
             )
             baker.make(
@@ -219,7 +217,6 @@ class TestBranchSupermarketListView:
                 parent_supermarket=parent,
                 state="DF",
                 city="Gama",
-                address=f"{name}, QI 01",
                 coordinates=Point(-47.9292, -15.7801, srid=4326),
             )
             baker.make(
@@ -251,7 +248,6 @@ class TestBranchSupermarketListView:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Comper, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         baker.make(
@@ -282,7 +278,6 @@ class TestBranchSupermarketListView:
                 parent_supermarket=parent,
                 state="DF",
                 city="Gama",
-                address=f"{name}, QI 01",
                 coordinates=Point(-47.9292, -15.7801, srid=4326),
             )
             baker.make(
@@ -340,7 +335,6 @@ class TestBranchCityListView:
                 parent_supermarket=parent,
                 state="DF",
                 city=city,
-                address="QI 01",
             )
             baker.make(
                 BranchProductOffer,
@@ -367,7 +361,6 @@ class TestBranchCityListView:
             parent_supermarket=active_parent,
             state="DF",
             city="Gama",
-            address="QI 01",
         )
         baker.make(
             BranchProductOffer,
@@ -381,7 +374,6 @@ class TestBranchCityListView:
             parent_supermarket=expired_parent,
             state="DF",
             city="Taguatinga",
-            address="QI 02",
         )
         baker.make(
             BranchProductOffer,
@@ -481,7 +473,6 @@ class TestHybridSearchView:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         # matched by NAME (relevance tier 4) - exact, strongest match
@@ -623,7 +614,6 @@ class TestBranchProductOfferListView:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         for name in names:
@@ -743,7 +733,6 @@ class TestBranchProductOfferListView:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         for name, category in [("Leite", dairy), ("Suco de Laranja", drinks)]:
@@ -818,7 +807,6 @@ class TestBranchProductOfferListView:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         for name, category in [("Picanha", meats), ("Açúcar Refinado", sugar)]:
@@ -864,7 +852,6 @@ class TestValidOffersScope:
             parent_supermarket=parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=Point(-47.9292, -15.7801, srid=4326),
         )
         valid_offer = BranchProductOffer.objects.create(
@@ -926,7 +913,6 @@ class TestValidOffersScope:
             parent_supermarket=active_parent,
             state="DF",
             city="Gama",
-            address="Gama Sul, QI 01",
             coordinates=coordinates,
         )
         baker.make(
@@ -944,7 +930,6 @@ class TestValidOffersScope:
             parent_supermarket=expired_parent,
             state="DF",
             city="Taguatinga",
-            address="QNM 01",
             coordinates=coordinates,
         )
         baker.make(

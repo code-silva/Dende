@@ -8,11 +8,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("app", "0003_sync_supabase"),
-        (
-            "app",
-            "0003_remove_branchsupermarket_branchsupermarket_coordinates_and_parent_supermarket_uniqueness_and_more",
-        ),
+        ("app", "0002_remove_branchsupermarket_address_and_more"),
     ]
 
     operations = [

@@ -31,7 +31,15 @@ class BranchSupermarketSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="parent_supermarket.name", read_only=True)
     state = serializers.CharField(read_only=True)
     city = serializers.CharField(read_only=True)
-    address = serializers.CharField(read_only=True)
+    address = serializers.SerializerMethodField()
+
+    def get_address(self, obj):
+        city = obj.city
+        if obj.neighborhood:
+            return f"{city} - {obj.neighborhood}"
+        if obj.street:
+            return f"{city} - {obj.street}"
+        return city
 
     distanceInKilometers = serializers.SerializerMethodField()
 
