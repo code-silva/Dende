@@ -65,6 +65,8 @@ def normalize_string_casing(text: str) -> str:
     for word in words[1:]:
         normalized.append(word if word in prepositions else word.capitalize())
     return " ".join(normalized)
+
+
 def normalize_search_query(text: str | None) -> str:
     """
     Normalizes a search term for accent-insensitive fuzzy matching:

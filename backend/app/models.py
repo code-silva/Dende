@@ -51,6 +51,7 @@ class Product(models.Model):
                 fields=["name", "category", "brand", "measurement", "measurement_unit"],
                 name="unique_product_constraint",
             )
+        ]
         indexes = [
             GinIndex(
                 fields=["name"],
