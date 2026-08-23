@@ -1,40 +1,83 @@
-import { useCallback, useEffect } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  type RouteProp,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type FlatList, Keyboard, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AiInfoBanner } from "../components/AiInfoBanner";
 import { EmptyProductState } from "../components/EmptyProductState";
-import { InfoBanner } from "../components/InfoBanner";
+import { EmptySearchState } from "../components/EmptySearchState";
 import { LoadingFooter } from "../components/LoadingFooter";
 import { MarketBanner } from "../components/MarketBanner";
-import ProductCard from "../components/ProductCard";
+import { ProductGrid } from "../components/ProductGrid";
 import { SearchBar } from "../components/SearchBar";
 import { useProductsFetch } from "../hooks/useProductsFetch";
+import type { HomeStackParamList } from "../types/navigation";
+import type { Product } from "../types/product";
 
-interface SearchResultsScreenProps {
-  route: {
-    params: {
-      query: string;
-      selectedMarket: { id: number; name: string };
-      latitude?: number;
-      longitude?: number;
-    };
-  };
-}
+type SearchResultsRouteProp = RouteProp<
+  HomeStackParamList,
+  "SearchResultsScreen"
+>;
 
-export function SearchResultsScreen({ route }: SearchResultsScreenProps) {
-  const { query, selectedMarket, latitude, longitude } = route.params;
+type SearchResultsNavigationProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  "SearchResultsScreen"
+>;
+
+export function SearchResultsScreen() {
+  const route = useRoute<SearchResultsRouteProp>();
+  const navigation = useNavigation<SearchResultsNavigationProp>();
+  const { selectedMarket, latitude, longitude } = route.params;
+  const insets = useSafeAreaInsets();
+
+  const [searchTerm, setSearchTerm] = useState(route.params.query);
+  const listRef = useRef<FlatList<Product>>(null);
 
   const { products, isLoading, hasMoreData, fetchData } = useProductsFetch({
     latitude,
     longitude,
-    query,
+    query: searchTerm,
     marketId: selectedMarket?.id,
   });
+
+  // Keeps the single source of truth in sync when route params change
+  // (e.g. a new query submitted from this screen or re-navigation).
+  useEffect(() => {
+    setSearchTerm(route.params.query);
+  }, [route.params.query]);
+
+  const initialFetchRef = useRef(false);
+
+  useEffect(() => {
+    if (!initialFetchRef.current) {
+      initialFetchRef.current = true;
+      fetchData();
+    }
+  }, [fetchData]);
+
+  const handleSearchSubmit = useCallback(
+    (text: string) => {
+      Keyboard.dismiss();
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      setSearchTerm(trimmed);
+      navigation.setParams({ query: trimmed });
+      fetchData(trimmed, true);
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    },
+    [fetchData, navigation],
+  );
 
   // --- SEARCH HEADER COMPONENT ---
   const SearchHeader = useCallback(
     () => (
-      <View style={styles.headerContainer}>
-        <SearchBar initialValue={query} />
+      <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+        <SearchBar initialValue={searchTerm} onSearch={handleSearchSubmit} />
 
         {selectedMarket && (
           <MarketBanner
@@ -43,22 +86,17 @@ export function SearchResultsScreen({ route }: SearchResultsScreenProps) {
           />
         )}
 
-        <InfoBanner />
+        <AiInfoBanner />
 
         <Text style={styles.resultsText}>
           {selectedMarket
             ? `Produtos em ${selectedMarket.name}`
-            : `Resultados para "${query}"`}
+            : `Resultados para "${searchTerm}"`}
         </Text>
       </View>
     ),
-    [query, selectedMarket],
+    [insets, searchTerm, selectedMarket, handleSearchSubmit],
   );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: initial fetch on mount
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const renderFooter = () => {
     if (isLoading) {
@@ -70,48 +108,41 @@ export function SearchResultsScreen({ route }: SearchResultsScreenProps) {
     return null;
   };
 
+  const renderEmpty = () => {
+    if (isLoading) return null;
+    return <EmptySearchState query={searchTerm} />;
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8F9FA" }}>
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item, index }) => (
-          <View style={styles.cardWrapper}>
-            <ProductCard
-              product={{ ...item, ranking: index + 1 }}
-              handlePress={() => console.log("Clicked on product")}
-              handleAddToList={() => console.log("Added to list")}
-            />
-          </View>
-        )}
-        numColumns={2}
-        onEndReached={fetchData}
+    <View style={styles.container}>
+      <ProductGrid
+        products={products}
+        onEndReached={() => fetchData()}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        columnWrapperStyle={styles.gridRow}
-        ListHeaderComponent={SearchHeader}
-        contentContainerStyle={styles.gridContainer}
-        showsVerticalScrollIndicator={false}
+        listFooterComponent={renderFooter()}
+        listHeaderComponent={<SearchHeader />}
+        listEmptyComponent={renderEmpty()}
+        listRef={listRef}
+        contentContainerStyle={[
+          styles.gridContainer,
+          { paddingBottom: insets.bottom + 5 },
+        ]}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F8F9FA",
+  },
   headerContainer: {
     paddingBottom: 10,
   },
   gridContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  gridRow: {
-    justifyContent: "space-between",
-  },
-  cardWrapper: {
-    flex: 1,
-    marginHorizontal: 5,
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   resultsText: {
     fontSize: 16,

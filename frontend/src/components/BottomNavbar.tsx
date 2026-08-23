@@ -13,6 +13,7 @@ import { MyListScreen } from "../screens/MyListScreen";
 import { SearchResultsScreen } from "../screens/SearchResultsScreen";
 import { StoreProductsScreen } from "../screens/StoreProductsScreen";
 import { SupermarketsScreen } from "../screens/SupermarketsScreen";
+import type { HomeStackParamList } from "../types/navigation";
 
 const routeSettings = {
   home: {
@@ -65,7 +66,7 @@ function CustomTabButton(
   );
 }
 
-const HomeStack = createNativeStackNavigator();
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 
 function HomeStackScreen({
   location,
@@ -152,6 +153,10 @@ export function BottomNavbar({
             ...styles.tabBar,
             height: 65 + insets.bottom,
             paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+          },
+
+          sceneContainerStyle: {
+            backgroundColor: "#F8F9FA",
           },
 
           tabBarButton: (props) => (

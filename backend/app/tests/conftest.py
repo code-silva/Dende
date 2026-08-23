@@ -87,11 +87,14 @@ def offers_list(db, parent_supermarket):
     category2 = baker.make("app.Category", priority=2)
     category3 = baker.make("app.Category", priority=3)
 
+    future_date = timezone.now().date() + timedelta(days=7)
+
     offers = [
         baker.make(
             BranchProductOffer,
             product__name="arroz",
             product__category=category1,
+            offer__expiration_date=future_date,
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",
@@ -101,6 +104,7 @@ def offers_list(db, parent_supermarket):
             BranchProductOffer,
             product__name="feijão",
             product__category=category2,
+            offer__expiration_date=future_date,
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",
@@ -110,6 +114,7 @@ def offers_list(db, parent_supermarket):
             BranchProductOffer,
             product__name="danone",
             product__category=category3,
+            offer__expiration_date=future_date,
             branch_supermarket__parent_supermarket=parent_supermarket,
             branch_supermarket__state="DF",
             branch_supermarket__city="Gama",

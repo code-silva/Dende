@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NavigationContainer } from "@react-navigation/native";
+import { DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as SplashScreen from "expo-splash-screen";
@@ -20,6 +20,14 @@ import { useAppStore } from "./src/store/useAppStore";
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
+
+const appTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: "#F8F9FA",
+  },
+};
 
 export default function App() {
   const { fontsLoaded } = useLoadFonts();
@@ -152,7 +160,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.root}>
-        <NavigationContainer>
+        <NavigationContainer theme={appTheme}>
           <Stack.Navigator
             id="rootStack"
             initialRouteName={showOnboarding ? "OnboardingLocal" : "MainTabs"}

@@ -1,90 +1,11 @@
 from rest_framework import serializers
 
-from .models import BranchProductOffer, BranchSupermarket, Product
+from .models import BranchProductOffer, BranchSupermarket
 
 """
 The serializer transforms what would be a field with an ID and looks up in the table
 where the ID came from to return the value we passed and ultimately delivers a JSON.
 """
-
-
-class ProductOfferSerializer(serializers.ModelSerializer):
-    """
-    Serializer responsible for returning 'BranchProductOffer' entity information
-    focusing on basic product details and store location (JSON).
-
-    Returns:
-
-    {
-        "id": Unique identifier of the offer,
-        "price": Current price of the product,
-        "productName": Name of the product,
-        "brand": Product brand,
-        "image": Product image URL,
-        "marketName": Name of the parent supermarket,
-        "city": City where the store is located
-    }
-    """
-
-    productName = serializers.ReadOnlyField(source="product.name")
-    brand = serializers.ReadOnlyField(source="product.brand")
-    image = serializers.ImageField(source="product.image", read_only=True)
-    marketName = serializers.ReadOnlyField(source="branch_supermarket.parent_supermarket.name")
-    state = serializers.ReadOnlyField(source="branch_supermarket.state")
-    city = serializers.ReadOnlyField(source="branch_supermarket.city")
-    address = serializers.SerializerMethodField()
-
-    def get_address(self, obj):
-        branch = obj.branch_supermarket
-        if not branch:
-            return ""
-
-        city = branch.city
-        if branch.neighborhood:
-            return f"{city} - {branch.neighborhood}"
-        if branch.street:
-            return f"{city} - {branch.street}"
-        return city
-
-    class Meta:
-        model = BranchProductOffer
-        fields = [
-            "id",
-            "price",
-            "productName",
-            "brand",
-            "image",
-            "marketName",
-            "state",
-            "city",
-            "address",
-        ]
-
-
-class ProductSerializer(serializers.ModelSerializer):
-    """
-    Serializer responsible for returning 'Product' entity information,
-    including its category name and technical specifications (JSON).
-
-    Returns:
-
-    {
-        "id": Unique identifier of the product,
-        "name": Product name,
-        "brand": Product brand,
-        "measurement": Numeric value of the measurement,
-        "measurementUnit": Unit code (e.g., KG, UN),
-        "categoryName": Name of the category,
-        "image": Product image URL
-    }
-    """
-
-    categoryName = serializers.ReadOnlyField(source="category.name")
-    measurementUnit = serializers.ReadOnlyField(source="measurement_unit")
-
-    class Meta:
-        model = Product
-        fields = ["id", "name", "brand", "measurement", "measurementUnit", "categoryName", "image"]
 
 
 class BranchSupermarketSerializer(serializers.ModelSerializer):

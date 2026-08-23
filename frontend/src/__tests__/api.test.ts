@@ -38,7 +38,14 @@ describe("fetchNearbyMarkets", () => {
     const result = await fetchNearbyMarkets(-23.5, -46.6);
 
     expect(mockedFetchMarkets).toHaveBeenCalledTimes(1);
-    expect(mockedFetchMarkets).toHaveBeenCalledWith(-23.5, -46.6);
+    expect(mockedFetchMarkets).toHaveBeenCalledWith(
+      -23.5,
+      -46.6,
+      undefined,
+      undefined,
+      10,
+      undefined,
+    );
     expect(result).toEqual(mockMarkets);
   });
 
@@ -47,7 +54,14 @@ describe("fetchNearbyMarkets", () => {
 
     await fetchNearbyMarkets();
 
-    expect(mockedFetchMarkets).toHaveBeenCalledWith(undefined, undefined);
+    expect(mockedFetchMarkets).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      10,
+      undefined,
+    );
   });
 
   it("rejects when fetchMarkets fails", async () => {
@@ -97,7 +111,14 @@ describe("fetchHomeHighlights", () => {
     const result = await fetchHomeHighlights(-23.5, -46.6);
 
     expect(mockedFetchProducts).toHaveBeenCalledTimes(1);
-    expect(mockedFetchProducts).toHaveBeenCalledWith(-23.5, -46.6, 1);
+    expect(mockedFetchProducts).toHaveBeenCalledWith(
+      -23.5,
+      -46.6,
+      1,
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(result).toEqual(mockOffers);
   });
 
@@ -106,7 +127,14 @@ describe("fetchHomeHighlights", () => {
 
     await fetchHomeHighlights();
 
-    expect(mockedFetchProducts).toHaveBeenCalledWith(undefined, undefined, 1);
+    expect(mockedFetchProducts).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      1,
+      undefined,
+      undefined,
+      undefined,
+    );
   });
 
   it("rejects when fetchProducts fails", async () => {

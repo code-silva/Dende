@@ -1,5 +1,7 @@
 from django.contrib.gis.db import models as gis_models
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
+from django.utils import timezone
 
 from .utils import normalize_string_casing
 
@@ -49,6 +51,17 @@ class Product(models.Model):
                 fields=["name", "category", "brand", "measurement", "measurement_unit"],
                 name="unique_product_constraint",
             )
+        indexes = [
+            GinIndex(
+                fields=["name"],
+                name="product_name_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["brand"],
+                name="product_brand_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
         ]
 
     def __str__(self):
@@ -183,10 +196,29 @@ class BranchSupermarket(models.Model):
         super().save(*args, **kwargs)
 
 
+class BranchProductOfferQuerySet(models.QuerySet):
+    """QuerySet scoping `BranchProductOffer` rows to valid (non-expired) offers."""
+
+    def valid(self):
+        return self.filter(offer__expiration_date__gte=timezone.now().date())
+
+
+class BranchProductOfferManager(models.Manager):
+    """Default manager that exposes the `valid()` scope for `BranchProductOffer`."""
+
+    def get_queryset(self):
+        return BranchProductOfferQuerySet(self.model, using=self._db)
+
+    def valid(self):
+        return self.get_queryset().valid()
+
+
 class BranchProductOffer(models.Model):
     """Class representing the associative entity that performs the link
     of the ternary relationship between 'Product', 'Offer' and 'Branch Supermarket'.
     """
+
+    objects = BranchProductOfferManager()
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="branch_offers")
     branch_supermarket = models.ForeignKey(
