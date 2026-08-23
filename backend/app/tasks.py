@@ -86,7 +86,10 @@ def _extract_and_geocode_branches(consolidated_data: dict, text_path: Path):
         if parent_name:
             parent = ParentSupermarket.objects.filter(name=parent_name).first()
             if parent:
-                existing_addresses = [b.address.lower() for b in parent.branches.all()]
+                existing_addresses = []
+                for b in parent.branches.all():
+                    parts = filter(bool, [b.city, b.neighborhood, b.street, b.number])
+                    existing_addresses.append(" ".join(parts).lower())
 
         for branch in extracted_branches:
             address = branch.get("address")

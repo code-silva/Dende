@@ -53,6 +53,53 @@ class TestProduct:
         assert product.name == "Arroz Branco Tipo 1"
         assert product.brand == "Tio João"
 
+    @pytest.mark.skip(reason="SQLite doesn't support composite unique constraint.")
+    def test_product_uniqueness(self):
+        """Tests if the composite unique constraint works on Product."""
+        from app.models import Category, Product
+
+        category = baker.make(Category)
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="tio joão",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
+        with pytest.raises(IntegrityError):
+            baker.make(
+                Product,
+                name="arroz",
+                category=category,
+                brand="tio joão",
+                measurement=1.0,
+                measurement_unit="KG",
+            )
+
+    def test_create_different_products(self):
+        """Tests happy path: creating products that vary slightly in their composite fields."""
+        from app.models import Category, Product
+
+        category = baker.make(Category)
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="tio joão",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
+        baker.make(
+            Product,
+            name="arroz",
+            category=category,
+            brand="camil",
+            measurement=1.0,
+            measurement_unit="KG",
+        )
+        assert Product.objects.count() == 2
+
 
 @pytest.mark.django_db
 class TestParentSupermarket:
@@ -119,3 +166,44 @@ class TestOffer:
         baker.make(Offer, url="https://www.test.com")
         with pytest.raises(IntegrityError):
             baker.make(Offer, url="https://www.test.com")
+
+
+@pytest.mark.django_db
+class TestBranchProductOffer:
+    """
+    Class destined to the elaboration of tests of 'BranchProductOffer' model.
+    """
+
+    @pytest.mark.skip(reason="SQLite doesn't support composite unique constraint.")
+    def test_branch_product_offer_uniqueness(self):
+        from app.models import BranchProductOffer, BranchSupermarket, Offer, Product
+
+        product = baker.make(Product)
+        branch = baker.make(BranchSupermarket)
+        offer = baker.make(Offer)
+        baker.make(
+            BranchProductOffer, product=product, branch_supermarket=branch, offer=offer, price=10.0
+        )
+        with pytest.raises(IntegrityError):
+            baker.make(
+                BranchProductOffer,
+                product=product,
+                branch_supermarket=branch,
+                offer=offer,
+                price=15.0,
+            )
+
+    def test_create_different_branch_product_offers(self):
+        from app.models import BranchProductOffer, BranchSupermarket, Offer, Product
+
+        product1 = baker.make(Product)
+        product2 = baker.make(Product)
+        branch = baker.make(BranchSupermarket)
+        offer = baker.make(Offer)
+        baker.make(
+            BranchProductOffer, product=product1, branch_supermarket=branch, offer=offer, price=10.0
+        )
+        baker.make(
+            BranchProductOffer, product=product2, branch_supermarket=branch, offer=offer, price=15.0
+        )
+        assert BranchProductOffer.objects.count() == 2

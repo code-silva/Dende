@@ -231,6 +231,12 @@ class BranchProductOffer(models.Model):
     class Meta:
         verbose_name = "Produto Ofertado"
         verbose_name_plural = "Produtos Ofertados"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "branch_supermarket", "offer"],
+                name="unique_product_branch_offer",
+            )
+        ]
 
     def __str__(self):
         return f"{self.product.name} at {self.branch_supermarket}: $ {self.price}"
