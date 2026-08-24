@@ -86,7 +86,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
       <View style={styles.infoContainer}>
         <View style={styles.topInfoRow}>
           <View style={styles.productNameWrapper}>
-            <Text style={styles.productName} numberOfLines={2}>
+            <Text
+              style={styles.productName}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
               {product.productName}
               {product.measurement
                 ? ` | ${Math.floor(Number(product.measurement))} ${product.measurementUnit || ""}`
@@ -149,6 +153,7 @@ const styles = StyleSheet.create({
   productName: {
     fontWeight: "700",
     fontSize: 11,
+    lineHeight: 18,
     color: "#333",
   },
   marketName: {
@@ -160,6 +165,8 @@ const styles = StyleSheet.create({
   marketWrapper: {
     flex: 0.7,
     alignItems: "flex-end",
+    justifyContent: "center",
+    height: 38,
   },
   rankingBadge: {
     position: "absolute",
@@ -216,10 +223,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
     marginTop: 2,
+    height: 26,
   },
   productNameWrapper: {
     flex: 1.3,
     paddingRight: 10,
+    height: 38,
+    justifyContent: "center",
   },
   brandStyle: {
     fontSize: 10,
